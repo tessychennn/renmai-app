@@ -51,3 +51,8 @@ export interface GroupRepo {
   save(group: Group): Promise<void>;
   remove(id: string): Promise<void>;
 }
+
+export interface SettingsRepo {
+  get(): Promise<Settings>;
+  save(settings: Settings): Promise<void>;
+}
