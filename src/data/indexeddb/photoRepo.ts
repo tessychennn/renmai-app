@@ -1,6 +1,6 @@
 import { getDB } from './db';
 import type { PhotoRepo } from '../types';
-import { compressImage, makeThumbnail } from '../../lib/image';
+import { compressImage, makeThumbnail, readImageSize } from '../../lib/image';
 
 export class IndexedDBPhotoRepo implements PhotoRepo {
   async put(blob: Blob): Promise<string> {
@@ -17,6 +17,20 @@ export class IndexedDBPhotoRepo implements PhotoRepo {
     const db = await getDB();
     await db.put('photos', record);
     return record.id;
+  }
+
+  async restore(id: string, blob: Blob): Promise<void> {
+    const { width, height } = await readImageSize(blob);
+    const thumbBlob = await makeThumbnail(blob);
+    const db = await getDB();
+    await db.put('photos', {
+      id,
+      blob,
+      thumbBlob,
+      width,
+      height,
+      createdAt: new Date().toISOString(),
+    });
   }
 
   async getURL(id: string, variant: 'full' | 'thumb' = 'full'): Promise<string> {

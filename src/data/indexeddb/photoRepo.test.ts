@@ -13,6 +13,7 @@ vi.mock('../../lib/image', () => ({
     height: 900,
   })),
   makeThumbnail: vi.fn(async () => new Blob(['thumb'], { type: 'image/jpeg' })),
+  readImageSize: vi.fn(async () => ({ width: 1600, height: 900 })),
 }));
 
 const createObjectURL = vi.fn((_blob: Blob) => `blob:mock-${createObjectURL.mock.calls.length}`);
@@ -49,6 +50,13 @@ describe('IndexedDBPhotoRepo', () => {
   it('releaseURL 呼叫 revokeObjectURL', () => {
     repo.releaseURL('blob:mock-0');
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:mock-0');
+  });
+
+  it('restore 以指定 id 存入，不經過壓縮', async () => {
+    await repo.restore('restored-id', new Blob(['imported'], { type: 'image/jpeg' }));
+    await repo.getURL('restored-id');
+    const arg = createObjectURL.mock.calls[0][0];
+    expect(await arg.text()).toBe('imported');
   });
 
   it('remove 之後 getURL 拋錯', async () => {

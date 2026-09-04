@@ -46,3 +46,14 @@ export async function closeDB(): Promise<void> {
     dbPromise = null;
   }
 }
+
+/** 刪除整個資料庫（「刪除所有資料」與「取代匯入」用） */
+export async function destroyDB(): Promise<void> {
+  await closeDB();
+  await new Promise<void>((resolve, reject) => {
+    const request = indexedDB.deleteDatabase('renmai');
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+    request.onblocked = () => resolve();
+  });
+}

@@ -3,6 +3,7 @@ import HomePage from './pages/HomePage';
 import PersonFormPage from './pages/PersonFormPage';
 import PersonDetailPage from './pages/PersonDetailPage';
 import SettingsPage from './pages/SettingsPage';
+import PrivacyPage from './pages/PrivacyPage';
 
 export default function App() {
   return (
@@ -13,6 +14,7 @@ export default function App() {
         <Route path="/person/:id" element={<PersonDetailPage />} />
         <Route path="/person/:id/edit" element={<PersonFormPage />} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/privacy" element={<PrivacyPage />} />
       </Routes>
     </HashRouter>
   );

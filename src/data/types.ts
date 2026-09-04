@@ -39,6 +39,8 @@ export interface PersonRepo {
 export interface PhotoRepo {
   /** 存入一張圖（內部同時產生完整版與縮圖），回傳 photoId */
   put(blob: Blob): Promise<string>;
+  /** 匯入備份用：以指定 id 存入已壓縮的圖（不再壓縮，縮圖重新產生） */
+  restore(id: string, blob: Blob): Promise<void>;
   /** 取得可放進 <img src> 的 URL；列表一律用 'thumb'，詳細頁用 'full' */
   getURL(id: string, variant?: 'full' | 'thumb'): Promise<string>;
   /** 釋放 getURL 產生的資源 */

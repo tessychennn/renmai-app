@@ -51,3 +51,18 @@ export function compressImage(source: Blob): Promise<CompressedImage> {
 export async function makeThumbnail(source: Blob): Promise<Blob> {
   return (await scaleToJpeg(source, THUMB_MAX_EDGE)).blob;
 }
+
+/** 讀取圖片尺寸（不壓縮），匯入備份時用 */
+export async function readImageSize(source: Blob): Promise<{ width: number; height: number }> {
+  const url = URL.createObjectURL(source);
+  try {
+    const img = new Image();
+    img.src = url;
+    await img.decode();
+    return { width: img.naturalWidth, height: img.naturalHeight };
+  } catch {
+    throw new Error(UNSUPPORTED_IMAGE_MESSAGE);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}

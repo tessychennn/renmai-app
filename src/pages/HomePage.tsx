@@ -1,6 +1,47 @@
-import { Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import PersonCard from '../components/PersonCard';
+import Toast from '../components/Toast';
+import { groupRepo, personRepo, settingsRepo } from '../data';
+import { isBackupStale } from '../lib/backup';
+import type { Group, Person } from '../data/types';
 
 export default function HomePage() {
+  const location = useLocation();
+  const [toast, setToast] = useState<string | null>(
+    (location.state as { toast?: string } | null)?.toast ?? null
+  );
+  const [search, setSearch] = useState('');
+  const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
+  const [persons, setPersons] = useState<Person[] | null>(null);
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [backupStale, setBackupStale] = useState(false);
+
+  useEffect(() => {
+    if (!toast) return;
+    window.history.replaceState({}, '');
+    const timer = setTimeout(() => setToast(null), 2200);
+    return () => clearTimeout(timer);
+  }, [toast]);
+
+  useEffect(() => {
+    void groupRepo.list().then(setGroups);
+    void settingsRepo.get().then((s) => setBackupStale(isBackupStale(s.lastExportAt)));
+  }, []);
+
+  useEffect(() => {
+    void personRepo
+      .list({ search: search || undefined, groupIds: selectedGroupIds })
+      .then(setPersons);
+  }, [search, selectedGroupIds]);
+
+  const toggleGroup = (id: string) =>
+    setSelectedGroupIds((prev) =>
+      prev.includes(id) ? prev.filter((g) => g !== id) : [...prev, id]
+    );
+
+  const hasFilter = search !== '' || selectedGroupIds.length > 0;
+
   return (
     <div className="min-h-dvh">
       <header
@@ -28,23 +69,72 @@ export default function HomePage() {
         <div className="px-5 pb-3">
           <input
             type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
             placeholder="搜尋暱稱、場合、備註⋯"
             className="w-full rounded-xl border-[0.5px] border-hairline bg-white px-4 py-2.5 text-ink placeholder:text-ink-2 focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink"
           />
         </div>
+        {groups.length > 0 && (
+          <div className="flex gap-2 overflow-x-auto px-5 pb-3 [scrollbar-width:none]">
+            {groups.map((group) => {
+              const active = selectedGroupIds.includes(group.id);
+              return (
+                <button
+                  key={group.id}
+                  type="button"
+                  onClick={() => toggleGroup(group.id)}
+                  aria-pressed={active}
+                  className={`flex shrink-0 items-center gap-1.5 rounded-full border-[0.5px] px-3 py-1.5 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink ${
+                    active ? 'border-ink bg-ink text-white' : 'border-hairline bg-white text-ink'
+                  }`}
+                >
+                  <span className="h-2 w-2 rounded-full" style={{ background: group.color }} />
+                  {group.name}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </header>
 
       <main
         className="px-5"
         style={{
-          paddingTop: 'calc(env(safe-area-inset-top) + 128px)',
+          paddingTop: `calc(env(safe-area-inset-top) + ${groups.length > 0 ? '178px' : '128px'})`,
           paddingBottom: 'calc(env(safe-area-inset-bottom) + 96px)',
         }}
       >
-        <div className="mt-24 text-center text-ink-2">
-          <p>還沒有人。</p>
-          <p className="mt-1">按右下角的 + 記下第一個。</p>
-        </div>
+        {backupStale && persons !== null && persons.length > 0 && (
+          <Link
+            to="/settings"
+            className="mb-3 block rounded-xl border-[0.5px] border-hairline bg-white px-4 py-3 text-sm shadow-[0_1px_3px_rgba(0,0,0,0.06)]"
+          >
+            <span className="font-medium text-danger">超過 14 天未備份。</span>
+            <span className="text-ink-2">到設定頁匯出一份，資料只存在這支手機上。</span>
+          </Link>
+        )}
+
+        {persons === null ? null : persons.length === 0 ? (
+          <div className="mt-24 text-center text-ink-2">
+            {hasFilter ? (
+              <p>找不到符合的人。</p>
+            ) : (
+              <>
+                <p>還沒有人。</p>
+                <p className="mt-1">按右下角的 + 記下第一個。</p>
+              </>
+            )}
+          </div>
+        ) : (
+          <ul className="flex flex-col gap-2.5">
+            {persons.map((person) => (
+              <li key={person.id}>
+                <PersonCard person={person} groups={groups} />
+              </li>
+            ))}
+          </ul>
+        )}
       </main>
 
       <Link
@@ -57,6 +147,8 @@ export default function HomePage() {
           <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
         </svg>
       </Link>
+
+      <Toast message={toast} />
     </div>
   );
 }

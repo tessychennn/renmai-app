@@ -10,6 +10,8 @@ export const photoRepo: PhotoRepo = new IndexedDBPhotoRepo();
 export const groupRepo: GroupRepo = new IndexedDBGroupRepo();
 export const settingsRepo: SettingsRepo = new IndexedDBSettingsRepo();
 
+export { destroyDB as clearAllData } from './indexeddb/db';
+
 /** 刪除人物並一併刪除其所有照片（規格 5.3：避免孤兒資料） */
 export async function deletePersonWithPhotos(id: string): Promise<void> {
   const person = await personRepo.get(id);
