@@ -50,8 +50,6 @@ export default function PersonFormPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const cameraInput = useRef<HTMLInputElement>(null);
-  const libraryInput = useRef<HTMLInputElement>(null);
   const photosRef = useRef<StagedPhoto[]>([]);
   photosRef.current = photos;
 
@@ -294,44 +292,35 @@ export default function PersonFormPage() {
               </div>
             ))}
           </div>
+          {/* 用原生 label 觸發 file input：iOS 上比程式呼叫 click() 可靠 */}
           <div className={`flex gap-2 ${photos.length > 0 ? 'mt-2' : ''}`}>
-            <button
-              type="button"
-              onClick={() => cameraInput.current?.click()}
-              className="flex-1 rounded-xl border-[0.5px] border-hairline bg-white px-4 py-3 font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink"
-            >
+            <label className="flex-1 cursor-pointer rounded-xl border-[0.5px] border-hairline bg-white px-4 py-3 text-center font-medium focus-within:outline focus-within:outline-2 focus-within:outline-ink">
               拍照
-            </button>
-            <button
-              type="button"
-              onClick={() => libraryInput.current?.click()}
-              className="flex-1 rounded-xl border-[0.5px] border-hairline bg-white px-4 py-3 font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink"
-            >
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="sr-only"
+                onChange={(e) => {
+                  addFiles(e.target.files, true);
+                  e.target.value = '';
+                }}
+              />
+            </label>
+            <label className="flex-1 cursor-pointer rounded-xl border-[0.5px] border-hairline bg-white px-4 py-3 text-center font-medium focus-within:outline focus-within:outline-2 focus-within:outline-ink">
               從相簿選
-            </button>
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                className="sr-only"
+                onChange={(e) => {
+                  addFiles(e.target.files, false);
+                  e.target.value = '';
+                }}
+              />
+            </label>
           </div>
-          <input
-            ref={cameraInput}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            hidden
-            onChange={(e) => {
-              addFiles(e.target.files, true);
-              e.target.value = '';
-            }}
-          />
-          <input
-            ref={libraryInput}
-            type="file"
-            accept="image/*"
-            multiple
-            hidden
-            onChange={(e) => {
-              addFiles(e.target.files, false);
-              e.target.value = '';
-            }}
-          />
         </section>
 
         <label className="block">
