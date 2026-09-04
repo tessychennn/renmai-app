@@ -2,13 +2,16 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import GlassHeader, { HEADER_PAD } from '../components/GlassHeader';
 import { groupRepo, personRepo, photoRepo, settingsRepo } from '../data';
+import { detectAndCrop, preloadScanner } from '../lib/documentScan';
 import type { Group, Person } from '../data/types';
 
 interface StagedPhoto {
   key: string;
   photoId?: string; // 已存在於 repo 的照片
-  file?: File; // 尚未存檔的新照片
+  file?: Blob; // 尚未存檔的新照片（可能是裁切後的版本）
+  originalFile?: Blob; // 自動裁切前的原圖，可還原
   previewURL: string;
+  scanning?: boolean;
 }
 
 const GROUP_COLORS = [
@@ -53,6 +56,7 @@ export default function PersonFormPage() {
   photosRef.current = photos;
 
   useEffect(() => {
+    preloadScanner(); // 先在背景載 OpenCV，拍第一張時就不用等
     void groupRepo.list().then(setGroups);
     if (id) {
       void personRepo.get(id).then(async (person) => {
@@ -86,18 +90,62 @@ export default function PersonFormPage() {
     };
   }, [id]);
 
-  const addFiles = (list: FileList | null) => {
+  const addFiles = (list: FileList | null, scan: boolean) => {
     if (!list) return;
     const added: StagedPhoto[] = Array.from(list).map((file) => ({
       key: crypto.randomUUID(),
       file,
       previewURL: URL.createObjectURL(file),
+      scanning: scan,
     }));
     setPhotos((prev) => {
       const next = [...prev, ...added];
       setAvatarKey((k) => k ?? next[0]?.key ?? null);
       return next;
     });
+    if (!scan) return;
+    // 拍照的照片跑自動裁切：偵測到明信片就換成裁好的版本，原圖留著可還原
+    for (const staged of added) {
+      void detectAndCrop(staged.file!).then((cropped) => {
+        setPhotos((prev) => {
+          const target = prev.find((p) => p.key === staged.key);
+          if (!target) {
+            // 照片在裁切完成前被移除了
+            return prev;
+          }
+          if (!cropped) {
+            return prev.map((p) => (p.key === staged.key ? { ...p, scanning: false } : p));
+          }
+          photoRepo.releaseURL(target.previewURL);
+          return prev.map((p) =>
+            p.key === staged.key
+              ? {
+                  ...p,
+                  file: cropped,
+                  originalFile: target.file,
+                  previewURL: URL.createObjectURL(cropped),
+                  scanning: false,
+                }
+              : p
+          );
+        });
+      });
+    }
+  };
+
+  const revertCrop = (key: string) => {
+    setPhotos((prev) =>
+      prev.map((p) => {
+        if (p.key !== key || !p.originalFile) return p;
+        photoRepo.releaseURL(p.previewURL);
+        return {
+          ...p,
+          file: p.originalFile,
+          originalFile: undefined,
+          previewURL: URL.createObjectURL(p.originalFile),
+        };
+      })
+    );
   };
 
   const removePhoto = (key: string) => {
@@ -219,6 +267,20 @@ export default function PersonFormPage() {
                     大頭貼
                   </span>
                 )}
+                {photo.scanning && (
+                  <span className="glass absolute left-1 top-1 rounded-full px-2 py-0.5 text-xs text-ink-2">
+                    偵測中⋯
+                  </span>
+                )}
+                {photo.originalFile && (
+                  <button
+                    type="button"
+                    onClick={() => revertCrop(photo.key)}
+                    className="glass absolute left-1 top-1 rounded-full px-2 py-0.5 text-xs font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink"
+                  >
+                    已裁切・還原
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => removePhoto(photo.key)}
@@ -255,7 +317,7 @@ export default function PersonFormPage() {
             capture="environment"
             hidden
             onChange={(e) => {
-              addFiles(e.target.files);
+              addFiles(e.target.files, true);
               e.target.value = '';
             }}
           />
@@ -266,7 +328,7 @@ export default function PersonFormPage() {
             multiple
             hidden
             onChange={(e) => {
-              addFiles(e.target.files);
+              addFiles(e.target.files, false);
               e.target.value = '';
             }}
           />

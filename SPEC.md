@@ -208,6 +208,8 @@ iPhone 拍出來的照片動輒 3–5MB，直接存會很快撐爆容量並拖�
 
 **HEIC 注意**：iOS Safari 透過 file input 取得的照片通常已自動轉為 JPEG，但不保證。若 `canvas.drawImage` 失敗，顯示可理解的錯誤訊息（「這張照片格式不支援，請改用相機拍攝」），不要靜默失敗。
 
+**自動裁切（掃描效果）**：用相機拍的照片自動偵測明信片／名片的四邊形範圍，透視校正後裁下（OpenCV.js，約 10MB，動態載入＋SW 快取，離線可用）。偵測不到就保留原圖；裁切後照片上有「還原」退路。只套用在「拍照」入口，相簿選的照片不動。邏輯在 `src/lib/documentScan.ts`。🔒 Capacitor 階段換成 iOS VisionKit 文件掃描。
+
 🔒 壓縮邏輯獨立成 `src/lib/image.ts`，不要寫在 component 裡。Capacitor 階段這裡會換成原生實作。
 
 ---
