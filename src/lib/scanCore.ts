@@ -55,6 +55,20 @@ export function orderCorners(points: Point[]): Quad {
   return [tl, tr, br, bl];
 }
 
+/**
+ * Blob → ImageBitmap，強制套用 EXIF 方向。
+ * iPhone 直拿拍的照片檔案是橫的、靠 EXIF 轉正；畫面上的 <img> 會自動轉，
+ * 但 worker 的 createImageBitmap 不一定會——不強制的話，偵測座標會落在
+ * 未轉正的座標系上，套回畫面後四個角全部錯位。
+ */
+async function toBitmap(source: Blob): Promise<ImageBitmap> {
+  try {
+    return await createImageBitmap(source, { imageOrientation: 'from-image' });
+  } catch {
+    return await createImageBitmap(source);
+  }
+}
+
 function bitmapToImageData(env: ScanEnv, bmp: ImageBitmap, width: number, height: number): ImageData {
   const { ctx } = env.createCanvas(width, height);
   (ctx as CanvasRenderingContext2D).drawImage(bmp, 0, 0, width, height);
@@ -218,7 +232,7 @@ export async function detectQuadCore(source: Blob, env: ScanEnv): Promise<Quad |
   let bmp: ImageBitmap | null = null;
   try {
     const cv = await loadCV();
-    bmp = await createImageBitmap(source);
+    bmp = await toBitmap(source);
     const scale = Math.min(1, DETECT_MAX_EDGE / Math.max(bmp.width, bmp.height));
     const detectData = bitmapToImageData(
       env,
@@ -240,7 +254,7 @@ export async function warpCore(source: Blob, corners: Quad, env: ScanEnv): Promi
   let bmp: ImageBitmap | null = null;
   try {
     const cv = await loadCV();
-    bmp = await createImageBitmap(source);
+    bmp = await toBitmap(source);
     const [tl, tr, br, bl] = corners;
     const width = Math.round(Math.max(dist(tl, tr), dist(bl, br)));
     const height = Math.round(Math.max(dist(tl, bl), dist(tr, br)));
