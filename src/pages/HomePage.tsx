@@ -127,7 +127,7 @@ export default function HomePage() {
             )}
           </div>
         ) : (
-          <ul className="flex flex-col gap-2.5">
+          <ul className="grid grid-cols-2 gap-3">
             {persons.map((person) => (
               <li key={person.id}>
                 <PersonCard person={person} groups={groups} />
