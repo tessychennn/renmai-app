@@ -1,17 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import CropModal, { type CropResult } from '../components/CropModal';
 import GlassHeader, { HEADER_PAD } from '../components/GlassHeader';
 import { groupRepo, personRepo, photoRepo, settingsRepo } from '../data';
-import { detectAndCrop, preloadScanner } from '../lib/documentScan';
+import { preloadScanner } from '../lib/documentScan';
 import type { Group, Person } from '../data/types';
 
 interface StagedPhoto {
   key: string;
   photoId?: string; // 已存在於 repo 的照片
   file?: Blob; // 尚未存檔的新照片（可能是裁切後的版本）
-  originalFile?: Blob; // 自動裁切前的原圖，可還原
+  originalFile?: Blob; // 裁切前的原圖，可還原
   previewURL: string;
-  scanning?: boolean;
+}
+
+interface PendingCrop {
+  id: string;
+  file: File;
 }
 
 const GROUP_COLORS = [
@@ -45,6 +50,7 @@ export default function PersonFormPage() {
   const [photos, setPhotos] = useState<StagedPhoto[]>([]);
   const [avatarKey, setAvatarKey] = useState<string | null>(null);
   const [removedPhotoIds, setRemovedPhotoIds] = useState<string[]>([]);
+  const [cropQueue, setCropQueue] = useState<PendingCrop[]>([]);
   const [addingGroup, setAddingGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [saving, setSaving] = useState(false);
@@ -88,47 +94,30 @@ export default function PersonFormPage() {
     };
   }, [id]);
 
-  const addFiles = (list: FileList | null, scan: boolean) => {
+  // 新照片一律先進裁切確認頁（多張會排隊一張一張確認）
+  const addFiles = (list: FileList | null) => {
     if (!list) return;
-    const added: StagedPhoto[] = Array.from(list).map((file) => ({
-      key: crypto.randomUUID(),
+    const added: PendingCrop[] = Array.from(list).map((file) => ({
+      id: crypto.randomUUID(),
       file,
-      previewURL: URL.createObjectURL(file),
-      scanning: scan,
     }));
-    setPhotos((prev) => {
-      const next = [...prev, ...added];
-      setAvatarKey((k) => k ?? next[0]?.key ?? null);
-      return next;
-    });
-    if (!scan) return;
-    // 拍照的照片跑自動裁切：偵測到明信片就換成裁好的版本，原圖留著可還原
-    for (const staged of added) {
-      void detectAndCrop(staged.file!).then((cropped) => {
-        setPhotos((prev) => {
-          const target = prev.find((p) => p.key === staged.key);
-          if (!target) {
-            // 照片在裁切完成前被移除了
-            return prev;
-          }
-          if (!cropped) {
-            return prev.map((p) => (p.key === staged.key ? { ...p, scanning: false } : p));
-          }
-          photoRepo.releaseURL(target.previewURL);
-          return prev.map((p) =>
-            p.key === staged.key
-              ? {
-                  ...p,
-                  file: cropped,
-                  originalFile: target.file,
-                  previewURL: URL.createObjectURL(cropped),
-                  scanning: false,
-                }
-              : p
-          );
-        });
+    setCropQueue((prev) => [...prev, ...added]);
+  };
+
+  const handleCropDone = (result: CropResult | null) => {
+    if (result) {
+      const staged: StagedPhoto = {
+        key: crypto.randomUUID(),
+        file: result.blob,
+        originalFile: result.original,
+        previewURL: URL.createObjectURL(result.blob),
+      };
+      setPhotos((prev) => {
+        setAvatarKey((k) => k ?? staged.key);
+        return [...prev, staged];
       });
     }
+    setCropQueue((prev) => prev.slice(1));
   };
 
   const revertCrop = (key: string) => {
@@ -265,11 +254,6 @@ export default function PersonFormPage() {
                     大頭貼
                   </span>
                 )}
-                {photo.scanning && (
-                  <span className="glass absolute left-1 top-1 rounded-full px-2 py-0.5 text-xs text-ink-2">
-                    偵測中⋯
-                  </span>
-                )}
                 {photo.originalFile && (
                   <button
                     type="button"
@@ -302,7 +286,7 @@ export default function PersonFormPage() {
                 capture="environment"
                 className="sr-only"
                 onChange={(e) => {
-                  addFiles(e.target.files, true);
+                  addFiles(e.target.files);
                   e.target.value = '';
                 }}
               />
@@ -315,7 +299,7 @@ export default function PersonFormPage() {
                 multiple
                 className="sr-only"
                 onChange={(e) => {
-                  addFiles(e.target.files, false);
+                  addFiles(e.target.files);
                   e.target.value = '';
                 }}
               />
@@ -449,6 +433,10 @@ export default function PersonFormPage() {
           </p>
         )}
       </main>
+
+      {cropQueue.length > 0 && (
+        <CropModal key={cropQueue[0].id} file={cropQueue[0].file} onDone={handleCropDone} />
+      )}
     </div>
   );
 }

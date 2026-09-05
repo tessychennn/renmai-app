@@ -1,7 +1,7 @@
-// Web Worker：OpenCV 的載入、解析、偵測全部在這條背景執行緒，
+// Web Worker：OpenCV 的載入、解析、偵測、裁切全部在背景執行緒，
 // 主執行緒（UI）完全不會被 14MB 的程式解析凍住。
 /// <reference lib="webworker" />
-import { detectAndCropCore, loadCV, type ScanEnv } from './scanCore';
+import { detectQuadCore, loadCV, warpCore, type Quad, type ScanEnv } from './scanCore';
 
 const env: ScanEnv = {
   createCanvas(width, height) {
@@ -15,20 +15,26 @@ const env: ScanEnv = {
 
 interface ScanRequest {
   id: number;
+  op: 'preload' | 'detect' | 'warp';
   blob?: Blob;
-  preload?: boolean;
+  corners?: Quad;
 }
 
 self.onmessage = async (e: MessageEvent<ScanRequest>) => {
-  const { id, blob, preload } = e.data;
-  if (preload) {
+  const { id, op, blob, corners } = e.data;
+  if (op === 'preload') {
     void loadCV().catch(() => undefined);
     return;
   }
   if (!blob) {
-    self.postMessage({ id, blob: null });
+    self.postMessage({ id, result: null });
     return;
   }
-  const result = await detectAndCropCore(blob, env);
-  self.postMessage({ id, blob: result });
+  const result =
+    op === 'detect'
+      ? await detectQuadCore(blob, env)
+      : corners
+        ? await warpCore(blob, corners, env)
+        : null;
+  self.postMessage({ id, result });
 };

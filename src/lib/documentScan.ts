@@ -1,14 +1,23 @@
-// 明信片／名片自動裁切的進入點。
+// 明信片／名片裁切的進入點：偵測（detectQuad）與裁切（cropWithCorners）分開，
+// UI 先顯示偵測到的邊框、使用者確認後才裁。
 // 優先走 Web Worker（不卡 UI）；環境不支援時退回主執行緒實作。
 // 🔒 Capacitor 階段這裡會換成 iOS VisionKit 文件掃描。
-import { detectAndCropCore, loadCV, type ScanEnv } from './scanCore';
+import {
+  detectQuadCore,
+  loadCV,
+  warpCore,
+  type Quad,
+  type ScanEnv,
+} from './scanCore';
 
-const SCAN_TIMEOUT_MS = 20_000;
+export type { Point, Quad } from './scanCore';
+
+const SCAN_TIMEOUT_MS = 30_000;
 
 let worker: Worker | null = null;
 let workerBroken = false;
 let seq = 0;
-const pending = new Map<number, (blob: Blob | null) => void>();
+const pending = new Map<number, (result: unknown) => void>();
 
 function workerSupported(): boolean {
   return (
@@ -24,8 +33,8 @@ function getWorker(): Worker | null {
   if (!worker) {
     try {
       worker = new Worker(new URL('./scanWorker.ts', import.meta.url), { type: 'module' });
-      worker.onmessage = (e: MessageEvent<{ id: number; blob: Blob | null }>) => {
-        pending.get(e.data.id)?.(e.data.blob);
+      worker.onmessage = (e: MessageEvent<{ id: number; result: unknown }>) => {
+        pending.get(e.data.id)?.(e.data.result);
         pending.delete(e.data.id);
       };
       worker.onerror = () => {
@@ -43,14 +52,29 @@ function getWorker(): Worker | null {
   return worker;
 }
 
+function callWorker<T>(op: 'detect' | 'warp', blob: Blob, corners?: Quad): Promise<T | null> {
+  const w = getWorker()!;
+  return new Promise<T | null>((resolve) => {
+    const id = ++seq;
+    pending.set(id, resolve as (result: unknown) => void);
+    w.postMessage({ id, op, blob, corners });
+    setTimeout(() => {
+      if (pending.has(id)) {
+        pending.delete(id);
+        resolve(null);
+      }
+    }, SCAN_TIMEOUT_MS);
+  });
+}
+
 /** 背景預載 OpenCV（在 worker 裡），讓第一張照片不用等下載 */
 export function preloadScanner(): void {
   const w = getWorker();
   if (w) {
-    w.postMessage({ id: 0, preload: true });
+    w.postMessage({ id: 0, op: 'preload' });
   }
   // 不支援 worker 的環境不預載：主執行緒解析 14MB 會凍住 UI，
-  // 等真的拍了第一張再載（偵測中標籤會多轉幾秒）。
+  // 等真的用到再載。
 }
 
 const mainEnv: ScanEnv = {
@@ -67,28 +91,23 @@ const mainEnv: ScanEnv = {
   },
 };
 
-/**
- * 偵測並裁切照片中的明信片／名片。
- * 成功回傳裁好的 JPEG Blob；偵測不到（或任何錯誤）回傳 null，呼叫端保留原圖。
- */
-export async function detectAndCrop(source: Blob): Promise<Blob | null> {
-  const w = getWorker();
-  if (w) {
-    return new Promise<Blob | null>((resolve) => {
-      const id = ++seq;
-      pending.set(id, resolve);
-      w.postMessage({ id, blob: source });
-      setTimeout(() => {
-        if (pending.has(id)) {
-          pending.delete(id);
-          resolve(null);
-        }
-      }, SCAN_TIMEOUT_MS);
-    });
-  }
+/** 偵測照片中的明信片／名片邊框；找不到（或錯誤）回傳 null */
+export async function detectQuad(source: Blob): Promise<Quad | null> {
+  if (getWorker()) return callWorker<Quad>('detect', source);
   try {
     await loadCV();
-    return await detectAndCropCore(source, mainEnv);
+    return await detectQuadCore(source, mainEnv);
+  } catch {
+    return null;
+  }
+}
+
+/** 依四個角透視裁切；失敗回傳 null，呼叫端保留原圖 */
+export async function cropWithCorners(source: Blob, corners: Quad): Promise<Blob | null> {
+  if (getWorker()) return callWorker<Blob>('warp', source, corners);
+  try {
+    await loadCV();
+    return await warpCore(source, corners, mainEnv);
   } catch {
     return null;
   }
