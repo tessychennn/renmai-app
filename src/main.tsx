@@ -1,7 +1,10 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import { startUpdateCheck } from './lib/updateCheck';
 import './index.css';
+
+startUpdateCheck();
 
 // iOS 對加入主畫面的 PWA 較不會清除儲存，但仍要求持久化以求最大保障
 if (navigator.storage?.persist) {

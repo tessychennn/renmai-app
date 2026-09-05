@@ -135,6 +135,17 @@ export default function PersonFormPage() {
     );
   };
 
+  const movePhoto = (key: string, dir: -1 | 1) => {
+    setPhotos((prev) => {
+      const i = prev.findIndex((p) => p.key === key);
+      const j = i + dir;
+      if (i < 0 || j < 0 || j >= prev.length) return prev;
+      const next = [...prev];
+      [next[i], next[j]] = [next[j], next[i]];
+      return next;
+    });
+  };
+
   const removePhoto = (key: string) => {
     setPhotos((prev) => {
       const target = prev.find((p) => p.key === key);
@@ -239,7 +250,7 @@ export default function PersonFormPage() {
         {/* 照片優先：剛拿到明信片的當下先拍 */}
         <section>
           <div className="grid grid-cols-3 gap-2">
-            {photos.map((photo) => (
+            {photos.map((photo, index) => (
               <div key={photo.key} className="relative aspect-square">
                 <button
                   type="button"
@@ -262,6 +273,34 @@ export default function PersonFormPage() {
                   >
                     已裁切・還原
                   </button>
+                )}
+                {photos.length > 1 && (
+                  <div className="absolute bottom-1 right-1 flex gap-1">
+                    {index > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => movePhoto(photo.key, -1)}
+                        aria-label="往前移"
+                        className="glass flex h-6 w-6 items-center justify-center rounded-full text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink"
+                      >
+                        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+                          <path d="M6.5 1.5 3 5l3.5 3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </button>
+                    )}
+                    {index < photos.length - 1 && (
+                      <button
+                        type="button"
+                        onClick={() => movePhoto(photo.key, 1)}
+                        aria-label="往後移"
+                        className="glass flex h-6 w-6 items-center justify-center rounded-full text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink"
+                      >
+                        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+                          <path d="M3.5 1.5 7 5 3.5 8.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
                 )}
                 <button
                   type="button"

@@ -27,23 +27,22 @@ export default function PersonCard({ person, groups }: { person: Person; groups:
         )}
       </div>
       <div className="px-3 py-2.5">
-        <div className="flex items-center justify-between gap-2">
-          <p className="min-w-0 truncate font-medium">{person.displayName}</p>
-          {dots.length > 0 && (
-            <div className="flex shrink-0 gap-1">
-              {dots.map((g) => (
-                <span
-                  key={g.id}
-                  title={g.name}
-                  className="h-2 w-2 rounded-full"
-                  style={{ background: g.color }}
-                />
-              ))}
-            </div>
-          )}
-        </div>
+        <p className="truncate font-medium">{person.displayName}</p>
         {person.occasion && (
           <p className="mt-0.5 truncate text-sm text-ink-2">{person.occasion}</p>
+        )}
+        {dots.length > 0 && (
+          <div className="mt-1.5 flex flex-wrap gap-1">
+            {dots.map((g) => (
+              <span
+                key={g.id}
+                className="flex items-center gap-1 rounded-full border-[0.5px] border-hairline bg-ground px-1.5 py-0.5 text-xs text-ink-2"
+              >
+                <span className="h-1.5 w-1.5 rounded-full" style={{ background: g.color }} />
+                {g.name}
+              </span>
+            ))}
+          </div>
         )}
       </div>
     </Link>
