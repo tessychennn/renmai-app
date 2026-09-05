@@ -61,53 +61,155 @@ function bitmapToImageData(env: ScanEnv, bmp: ImageBitmap, width: number, height
   return (ctx as CanvasRenderingContext2D).getImageData(0, 0, width, height);
 }
 
-/** 在縮小圖上找最大的凸四邊形，回傳原尺寸座標；找不到回傳 null */
-function findQuad(cv: CV, imageData: ImageData, scale: number): Point[] | null {
-  const src = cv.matFromImageData(imageData);
-  const gray = new cv.Mat();
-  const edges = new cv.Mat();
-  const kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(5, 5));
+interface QuadCandidate {
+  points: Point[];
+  area: number;
+}
+
+/** b 為頂點的夾角（度） */
+function angleAt(a: Point, b: Point, c: Point): number {
+  const v1 = { x: a.x - b.x, y: a.y - b.y };
+  const v2 = { x: c.x - b.x, y: c.y - b.y };
+  const m = Math.hypot(v1.x, v1.y) * Math.hypot(v2.x, v2.y);
+  if (!m) return 0;
+  const cos = (v1.x * v2.x + v1.y * v2.y) / m;
+  return (Math.acos(Math.min(1, Math.max(-1, cos))) * 180) / Math.PI;
+}
+
+/**
+ * 過濾不像卡片的四邊形：對邊長度要接近、四角接近直角（容許透視變形）、
+ * 長寬比在合理範圍。沒有這層，多策略偵測會在雜亂照片上抓出垃圾框。
+ */
+function isPlausibleQuad(points: Point[]): boolean {
+  const [tl, tr, br, bl] = orderCorners(points);
+  const top = dist(tl, tr);
+  const bottom = dist(bl, br);
+  const left = dist(tl, bl);
+  const right = dist(tr, br);
+  if (Math.min(top, bottom, left, right) <= 0) return false;
+  if (Math.max(top, bottom) / Math.min(top, bottom) > 1.6) return false;
+  if (Math.max(left, right) / Math.min(left, right) > 1.6) return false;
+  const aspect = (top + bottom) / (left + right);
+  if (aspect < 0.25 || aspect > 4) return false;
+  const quad = [tl, tr, br, bl];
+  for (let i = 0; i < 4; i++) {
+    const ang = angleAt(quad[(i + 3) % 4], quad[i], quad[(i + 1) % 4]);
+    if (ang < 55 || ang > 125) return false;
+  }
+  return true;
+}
+
+/** 從一張二值圖（邊緣或閾值結果）收集四邊形候選 */
+function quadsFromBinary(cv: CV, binary: any, frameArea: number, candidates: QuadCandidate[]): void {
   const contours = new cv.MatVector();
   const hierarchy = new cv.Mat();
   try {
-    cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-    cv.GaussianBlur(gray, gray, new cv.Size(5, 5), 0);
-    cv.Canny(gray, edges, 50, 150);
-    cv.dilate(edges, edges, kernel);
-    cv.findContours(edges, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
-
-    const frameArea = imageData.width * imageData.height;
-    let bestPoints: Point[] | null = null;
-    let bestArea = 0;
+    cv.findContours(binary, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
     for (let i = 0; i < contours.size(); i++) {
       const contour = contours.get(i);
-      const approx = new cv.Mat();
+      const hull = new cv.Mat();
       try {
-        const area = cv.contourArea(contour);
-        if (area < frameArea * MIN_AREA_RATIO || area > frameArea * MAX_AREA_RATIO) continue;
-        const peri = cv.arcLength(contour, true);
-        cv.approxPolyDP(contour, approx, 0.02 * peri, true);
-        if (approx.rows === 4 && cv.isContourConvex(approx) && area > bestArea) {
-          const points: Point[] = [];
-          for (let j = 0; j < 4; j++) {
-            points.push({ x: approx.data32S[j * 2], y: approx.data32S[j * 2 + 1] });
+        if (cv.contourArea(contour) < frameArea * MIN_AREA_RATIO) continue;
+        // 先取凸包再逼近：邊緣有缺口或毛邊時仍能得到乾淨的四邊形
+        cv.convexHull(contour, hull);
+        const hullArea = cv.contourArea(hull);
+        if (hullArea < frameArea * MIN_AREA_RATIO || hullArea > frameArea * MAX_AREA_RATIO) continue;
+        const peri = cv.arcLength(hull, true);
+        for (const eps of [0.02, 0.035, 0.05]) {
+          const approx = new cv.Mat();
+          try {
+            cv.approxPolyDP(hull, approx, eps * peri, true);
+            if (approx.rows === 4) {
+              const points: Point[] = [];
+              for (let j = 0; j < 4; j++) {
+                points.push({ x: approx.data32S[j * 2], y: approx.data32S[j * 2 + 1] });
+              }
+              candidates.push({ points, area: cv.contourArea(approx) });
+              break;
+            }
+          } finally {
+            approx.delete();
           }
-          bestPoints = points;
-          bestArea = area;
         }
       } finally {
-        approx.delete();
+        hull.delete();
         contour.delete();
       }
     }
-    return bestPoints?.map((p) => ({ x: p.x / scale, y: p.y / scale })) ?? null;
+  } finally {
+    contours.delete();
+    hierarchy.delete();
+  }
+}
+
+/**
+ * 在縮小圖上找最大的四邊形，回傳原尺寸座標；找不到回傳 null。
+ * 跑四種前處理（兩種靈敏度的 Canny、Otsu 二值化、自適應閾值），
+ * 收集所有候選後取面積最大者——單一策略在陰影、低對比、光線不均下容易漏抓。
+ */
+function findQuad(cv: CV, imageData: ImageData, scale: number): Point[] | null {
+  const src = cv.matFromImageData(imageData);
+  const gray = new cv.Mat();
+  const kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(5, 5));
+  const frameArea = imageData.width * imageData.height;
+  const candidates: QuadCandidate[] = [];
+  try {
+    cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+    cv.GaussianBlur(gray, gray, new cv.Size(5, 5), 0);
+
+    // 變體 1、2：不同靈敏度的邊緣偵測（低閾值抓得到弱邊緣）
+    for (const [lo, hi] of [
+      [50, 150],
+      [20, 80],
+    ]) {
+      const edges = new cv.Mat();
+      try {
+        cv.Canny(gray, edges, lo, hi);
+        cv.dilate(edges, edges, kernel);
+        quadsFromBinary(cv, edges, frameArea, candidates);
+      } finally {
+        edges.delete();
+      }
+    }
+
+    // 變體 3：Otsu 全域二值化（亮卡片配暗桌面這類高對比場景最穩）
+    const otsu = new cv.Mat();
+    try {
+      cv.threshold(gray, otsu, 0, 255, cv.THRESH_BINARY + cv.THRESH_OTSU);
+      cv.morphologyEx(otsu, otsu, cv.MORPH_CLOSE, kernel);
+      quadsFromBinary(cv, otsu, frameArea, candidates);
+    } finally {
+      otsu.delete();
+    }
+
+    // 變體 4：自適應閾值（光線不均、有陰影時的救援）
+    const adaptive = new cv.Mat();
+    try {
+      cv.adaptiveThreshold(
+        gray,
+        adaptive,
+        255,
+        cv.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv.THRESH_BINARY,
+        25,
+        8
+      );
+      cv.morphologyEx(adaptive, adaptive, cv.MORPH_CLOSE, kernel);
+      quadsFromBinary(cv, adaptive, frameArea, candidates);
+    } finally {
+      adaptive.delete();
+    }
+
+    let best: QuadCandidate | null = null;
+    for (const c of candidates) {
+      if (!isPlausibleQuad(c.points)) continue;
+      if (!best || c.area > best.area) best = c;
+    }
+    return best?.points.map((p) => ({ x: p.x / scale, y: p.y / scale })) ?? null;
   } finally {
     src.delete();
     gray.delete();
-    edges.delete();
     kernel.delete();
-    contours.delete();
-    hierarchy.delete();
   }
 }
 
