@@ -43,6 +43,19 @@ describe('IndexedDBPersonRepo', () => {
     expect(ids).toEqual(['new', 'old']);
   });
 
+  it('可依認識日期排序，沒填的以加入日期代替', async () => {
+    await repo.save(
+      makePerson({ id: 'a', metDate: '2026-03-01', createdAt: '2026-09-01T00:00:00Z' })
+    );
+    await repo.save(
+      makePerson({ id: 'b', metDate: '2026-08-01', createdAt: '2026-09-02T00:00:00Z' })
+    );
+    await repo.save(makePerson({ id: 'c', createdAt: '2026-05-01T00:00:00Z' })); // 無 metDate → 2026-05-01
+
+    expect((await repo.list({ sort: 'metDate-desc' })).map((p) => p.id)).toEqual(['b', 'c', 'a']);
+    expect((await repo.list({ sort: 'metDate-asc' })).map((p) => p.id)).toEqual(['a', 'c', 'b']);
+  });
+
   it('搜尋比對 displayName、occasion、note、lineName（不分大小寫）', async () => {
     await repo.save(makePerson({ id: 'a', displayName: '阿明' }));
     await repo.save(makePerson({ id: 'b', displayName: '小華', lineName: 'Hua_Design' }));

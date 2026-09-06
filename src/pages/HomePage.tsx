@@ -4,7 +4,25 @@ import PersonCard from '../components/PersonCard';
 import Toast from '../components/Toast';
 import { groupRepo, personRepo, settingsRepo } from '../data';
 import { isBackupStale } from '../lib/backup';
-import type { Group, Person } from '../data/types';
+import type { Group, Person, PersonSort } from '../data/types';
+
+const SORT_OPTIONS: { value: PersonSort; label: string }[] = [
+  { value: 'createdAt-desc', label: '最近加入' },
+  { value: 'createdAt-asc', label: '最早加入' },
+  { value: 'metDate-desc', label: '最近認識' },
+  { value: 'metDate-asc', label: '最早認識' },
+  { value: 'name', label: '名稱' },
+];
+
+function loadSort(): PersonSort {
+  try {
+    const saved = localStorage.getItem('personSort');
+    if (SORT_OPTIONS.some((o) => o.value === saved)) return saved as PersonSort;
+  } catch {
+    // 私密瀏覽等情況拿不到就用預設
+  }
+  return 'createdAt-desc';
+}
 
 export default function HomePage() {
   const location = useLocation();
@@ -12,6 +30,7 @@ export default function HomePage() {
     (location.state as { toast?: string } | null)?.toast ?? null
   );
   const [search, setSearch] = useState('');
+  const [sortKey, setSortKey] = useState<PersonSort>(loadSort);
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
   const [persons, setPersons] = useState<Person[] | null>(null);
   const [groups, setGroups] = useState<Group[]>([]);
@@ -31,9 +50,18 @@ export default function HomePage() {
 
   useEffect(() => {
     void personRepo
-      .list({ search: search || undefined, groupIds: selectedGroupIds })
+      .list({ search: search || undefined, groupIds: selectedGroupIds, sort: sortKey })
       .then(setPersons);
-  }, [search, selectedGroupIds]);
+  }, [search, selectedGroupIds, sortKey]);
+
+  const changeSort = (value: PersonSort) => {
+    setSortKey(value);
+    try {
+      localStorage.setItem('personSort', value);
+    } catch {
+      // 存不了就只在本次生效
+    }
+  };
 
   const toggleGroup = (id: string) =>
     setSelectedGroupIds((prev) =>
@@ -75,9 +103,20 @@ export default function HomePage() {
             className="w-full rounded-xl border-[0.5px] border-hairline bg-white px-4 py-2.5 text-ink placeholder:text-ink-2 focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink"
           />
         </div>
-        {groups.length > 0 && (
-          <div className="flex gap-2 overflow-x-auto px-5 pb-3 [scrollbar-width:none]">
-            {groups.map((group) => {
+        <div className="flex items-center gap-2 overflow-x-auto px-5 pb-3 [scrollbar-width:none]">
+          <select
+            value={sortKey}
+            onChange={(e) => changeSort(e.target.value as PersonSort)}
+            aria-label="排序方式"
+            className="shrink-0 appearance-none rounded-full border-[0.5px] border-hairline bg-white px-3 py-1 text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink"
+          >
+            {SORT_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+          {groups.map((group) => {
               const active = selectedGroupIds.includes(group.id);
               return (
                 <button
@@ -93,15 +132,14 @@ export default function HomePage() {
                   {group.name}
                 </button>
               );
-            })}
-          </div>
-        )}
+          })}
+        </div>
       </header>
 
       <main
         className="px-5"
         style={{
-          paddingTop: `calc(env(safe-area-inset-top) + ${groups.length > 0 ? '178px' : '128px'})`,
+          paddingTop: 'calc(env(safe-area-inset-top) + 178px)',
           paddingBottom: 'calc(env(safe-area-inset-bottom) + 96px)',
         }}
       >

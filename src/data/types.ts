@@ -24,9 +24,17 @@ export interface Settings {
   lastExportAt?: string;
 }
 
+export type PersonSort =
+  | 'createdAt-desc' // 最近加入（預設）
+  | 'createdAt-asc' // 最早加入
+  | 'metDate-desc' // 最近認識
+  | 'metDate-asc' // 最早認識
+  | 'name'; // 名稱
+
 export interface PersonFilter {
   search?: string;
   groupIds?: string[];
+  sort?: PersonSort;
 }
 
 export interface PersonRepo {

@@ -20,7 +20,20 @@ export class IndexedDBPersonRepo implements PersonRepo {
       persons = persons.filter((p) => groupIds.some((g) => p.groupIds.includes(g)));
     }
 
-    return persons.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    // 沒填認識日期的人以加入日期代替，排序時不會沉到最後
+    const metOf = (p: Person) => p.metDate ?? p.createdAt.slice(0, 10);
+    switch (filter?.sort ?? 'createdAt-desc') {
+      case 'createdAt-asc':
+        return persons.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+      case 'metDate-desc':
+        return persons.sort((a, b) => metOf(b).localeCompare(metOf(a)));
+      case 'metDate-asc':
+        return persons.sort((a, b) => metOf(a).localeCompare(metOf(b)));
+      case 'name':
+        return persons.sort((a, b) => a.displayName.localeCompare(b.displayName, 'zh-Hant'));
+      default:
+        return persons.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    }
   }
 
   async get(id: string): Promise<Person | null> {
