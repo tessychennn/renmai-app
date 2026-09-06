@@ -165,11 +165,20 @@ function findQuad(cv: CV, imageData: ImageData, scale: number): Point[] | null {
   const src = cv.matFromImageData(imageData);
   const gray = new cv.Mat();
   const kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(5, 5));
+  const refEdges = new cv.Mat();
+  const refEdgesLoose = new cv.Mat();
   const frameArea = imageData.width * imageData.height;
   const candidates: QuadCandidate[] = [];
   try {
     cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
     cv.GaussianBlur(gray, gray, new cv.Size(5, 5), 0);
+
+    // 參考邊緣圖（嚴格閾值）：評分用。稍微膨脹容忍 2–3px 偏移。
+    cv.Canny(gray, refEdges, 50, 150);
+    cv.dilate(refEdges, refEdges, kernel);
+    // 寬鬆版：低對比場景嚴格圖上沒有邊，退回這張評分
+    cv.Canny(gray, refEdgesLoose, 20, 80);
+    cv.dilate(refEdgesLoose, refEdgesLoose, kernel);
 
     // 變體 1、2：不同靈敏度的邊緣偵測（低閾值抓得到弱邊緣）
     for (const [lo, hi] of [
@@ -214,16 +223,62 @@ function findQuad(cv: CV, imageData: ImageData, scale: number): Point[] | null {
       adaptive.delete();
     }
 
+    // 邊緣覆蓋率：候選框的四邊落在真實邊緣上的比例。
+    // 陰影邊界糊（Canny 反應弱）、桌緣框有一段沿著畫面邊界（沒有邊緣），
+    // 覆蓋率都低；真正的卡片邊緣是連續實線，覆蓋率高。
+    const coverage = (points: Point[], edgeMap: any): number => {
+      const cols = edgeMap.cols as number;
+      const quad = orderCorners(points);
+      let hit = 0;
+      let total = 0;
+      for (let s = 0; s < 4; s++) {
+        const a = quad[s];
+        const b = quad[(s + 1) % 4];
+        const n = 25;
+        for (let i = 1; i < n; i++) {
+          const x = Math.round(a.x + ((b.x - a.x) * i) / n);
+          const y = Math.round(a.y + ((b.y - a.y) * i) / n);
+          total++;
+          if (
+            x >= 0 &&
+            y >= 0 &&
+            x < imageData.width &&
+            y < imageData.height &&
+            edgeMap.data[y * cols + x] > 0
+          ) {
+            hit++;
+          }
+        }
+      }
+      return total ? hit / total : 0;
+    };
+
+    const plausible = candidates.filter((c) => isPlausibleQuad(c.points));
+    const score = (edgeMap: any) => {
+      const scored: { c: QuadCandidate; cov: number }[] = [];
+      for (const c of plausible) {
+        const cov = coverage(c.points, edgeMap);
+        if (cov >= 0.45) scored.push({ c, cov });
+      }
+      return scored;
+    };
+    let scored = score(refEdges);
+    if (scored.length === 0) scored = score(refEdgesLoose);
+    if (scored.length === 0) return null;
+    const maxCov = Math.max(...scored.map((s) => s.cov));
+    // 覆蓋率相近時取面積較小者：陰影／桌緣外框永遠比卡片本體大一圈
     let best: QuadCandidate | null = null;
-    for (const c of candidates) {
-      if (!isPlausibleQuad(c.points)) continue;
-      if (!best || c.area > best.area) best = c;
+    for (const { c, cov } of scored) {
+      if (cov < maxCov - 0.08) continue;
+      if (!best || c.area < best.area) best = c;
     }
     return best?.points.map((p) => ({ x: p.x / scale, y: p.y / scale })) ?? null;
   } finally {
     src.delete();
     gray.delete();
     kernel.delete();
+    refEdges.delete();
+    refEdgesLoose.delete();
   }
 }
 
