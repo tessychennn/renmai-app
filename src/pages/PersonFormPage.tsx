@@ -212,6 +212,13 @@ export default function PersonFormPage() {
         updatedAt: now,
       };
       await personRepo.save(person);
+      // 這次用的場合自動成為「目前場合」，下一個人不用重打
+      if (person.occasion) {
+        const settings = await settingsRepo.get();
+        if (settings.currentOccasion !== person.occasion) {
+          await settingsRepo.save({ ...settings, currentOccasion: person.occasion });
+        }
+      }
       if (editing) {
         navigate(`/person/${person.id}`, { replace: true });
       } else {
