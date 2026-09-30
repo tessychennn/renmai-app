@@ -167,6 +167,7 @@ export default function PersonFormPage() {
       name,
       color: GROUP_COLORS[groups.length % GROUP_COLORS.length],
       order: groups.length,
+      updatedAt: new Date().toISOString(),
     };
     await groupRepo.save(group);
     setGroups((prev) => [...prev, group]);

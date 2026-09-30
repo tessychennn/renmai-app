@@ -1,10 +1,24 @@
-import { getDB } from './db';
+import { notifyLocalChange } from '../changeSignal';
+import { dirtyKey, getDB } from './db';
 import type { Person, PersonFilter, PersonRepo } from '../types';
+
+/** 墓碑：只留同步需要的欄位。已刪除的人不該把備註、聯絡帳號繼續留在雲端。 */
+export function makeTombstone(p: Person, now: string): Person {
+  return {
+    id: p.id,
+    displayName: '',
+    photoIds: p.photoIds, // 另一支手機要靠它清掉對應的照片
+    groupIds: [],
+    createdAt: p.createdAt,
+    updatedAt: now,
+    deletedAt: now,
+  };
+}
 
 export class IndexedDBPersonRepo implements PersonRepo {
   async list(filter?: PersonFilter): Promise<Person[]> {
     const db = await getDB();
-    let persons = await db.getAll('persons');
+    let persons = (await db.getAll('persons')).filter((p) => !p.deletedAt);
 
     const q = filter?.search?.trim().toLowerCase();
     if (q) {
@@ -38,16 +52,32 @@ export class IndexedDBPersonRepo implements PersonRepo {
 
   async get(id: string): Promise<Person | null> {
     const db = await getDB();
-    return (await db.get('persons', id)) ?? null;
+    const person = await db.get('persons', id);
+    return person && !person.deletedAt ? person : null;
   }
 
   async save(person: Person): Promise<void> {
     const db = await getDB();
-    await db.put('persons', person);
+    const tx = db.transaction(['persons', 'dirty'], 'readwrite');
+    await Promise.all([
+      tx.objectStore('persons').put(person),
+      tx.objectStore('dirty').put({ key: dirtyKey('person', person.id), kind: 'person', id: person.id }),
+      tx.done,
+    ]);
+    notifyLocalChange();
   }
 
   async remove(id: string): Promise<void> {
     const db = await getDB();
-    await db.delete('persons', id);
+    const tx = db.transaction(['persons', 'dirty'], 'readwrite');
+    const current = await tx.objectStore('persons').get(id);
+    if (current && !current.deletedAt) {
+      await Promise.all([
+        tx.objectStore('persons').put(makeTombstone(current, new Date().toISOString())),
+        tx.objectStore('dirty').put({ key: dirtyKey('person', id), kind: 'person', id }),
+      ]);
+    }
+    await tx.done;
+    notifyLocalChange();
   }
 }

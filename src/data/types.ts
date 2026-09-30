@@ -10,6 +10,8 @@ export interface Person {
   note?: string;
   createdAt: string;
   updatedAt: string;
+  /** 軟刪除標記：同步時要讓另一支手機知道這筆被刪了，所以不能直接消失 */
+  deletedAt?: string;
 }
 
 export interface Group {
@@ -17,6 +19,8 @@ export interface Group {
   name: string;
   color: string; // hex
   order: number;
+  updatedAt: string;
+  deletedAt?: string;
 }
 
 export interface Settings {

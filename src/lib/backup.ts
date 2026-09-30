@@ -45,7 +45,7 @@ function base64ToBlob(data: string): Blob {
  * 不對整包資料一次 JSON.stringify —— 照片逐張序列化 push 進 parts，
  * 最後用 Blob 組裝，避免大字串在 iOS Safari 造成記憶體不足。
  */
-export async function exportBackup(): Promise<Blob> {
+export async function exportBackup(): Promise<{ blob: Blob; skippedPhotos: number }> {
   const persons = await personRepo.list();
   const groups = await groupRepo.list();
   const settings = await settingsRepo.get();
@@ -59,6 +59,7 @@ export async function exportBackup(): Promise<Blob> {
 
   const photoIds = [...new Set(persons.flatMap((p) => p.photoIds))];
   let first = true;
+  let skippedPhotos = 0;
   for (const id of photoIds) {
     let url: string | null = null;
     try {
@@ -68,18 +69,20 @@ export async function exportBackup(): Promise<Blob> {
       parts.push((first ? '' : ',') + JSON.stringify({ id, data }));
       first = false;
     } catch {
-      // 孤兒引用：略過，不讓一張壞照片毀掉整份備份
+      // 不讓一張壞照片毀掉整份備份；雲端版下載不到（離線且還沒載過完整版）也會落到這裡，
+      // 所以要回報略過幾張，讓使用者知道備份不完整
+      skippedPhotos++;
     } finally {
       if (url) photoRepo.releaseURL(url);
     }
   }
   parts.push(']}');
-  return new Blob(parts, { type: 'application/json' });
+  return { blob: new Blob(parts, { type: 'application/json' }), skippedPhotos };
 }
 
-/** 觸發下載並更新上次匯出時間 */
-export async function exportAndDownload(): Promise<void> {
-  const blob = await exportBackup();
+/** 觸發下載並更新上次匯出時間；回傳沒能放進備份的照片張數 */
+export async function exportAndDownload(): Promise<{ skippedPhotos: number }> {
+  const { blob, skippedPhotos } = await exportBackup();
   const date = new Date().toISOString().slice(0, 10);
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -92,6 +95,7 @@ export async function exportAndDownload(): Promise<void> {
 
   const settings = await settingsRepo.get();
   await settingsRepo.save({ ...settings, lastExportAt: new Date().toISOString() });
+  return { skippedPhotos };
 }
 
 export async function importBackup(file: File, mode: 'merge' | 'replace'): Promise<void> {
@@ -113,7 +117,8 @@ export async function importBackup(file: File, mode: 'merge' | 'replace'): Promi
     await photoRepo.restore(photo.id, base64ToBlob(photo.data));
   }
   for (const group of data.groups ?? []) {
-    await groupRepo.save(group);
+    // 舊版備份的分組沒有 updatedAt
+    await groupRepo.save({ ...group, updatedAt: group.updatedAt ?? new Date().toISOString() });
   }
   for (const person of data.persons) {
     const existing = await personRepo.get(person.id);

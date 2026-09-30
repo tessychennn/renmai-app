@@ -10,7 +10,14 @@ const groupRepo = new IndexedDBGroupRepo();
 const personRepo = new IndexedDBPersonRepo();
 
 function makeGroup(overrides: Partial<Group> = {}): Group {
-  return { id: crypto.randomUUID(), name: '設計圈', color: '#5B8DEF', order: 0, ...overrides };
+  return {
+    id: crypto.randomUUID(),
+    name: '設計圈',
+    color: '#5B8DEF',
+    order: 0,
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  };
 }
 
 function makePerson(overrides: Partial<Person> = {}): Person {
