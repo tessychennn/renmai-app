@@ -3,12 +3,18 @@ backend:
   phases:
     build:
       commands:
-        - npm ci --cache .npm --prefer-offline
+        # aws-cdk-lib 要求 Node 20 以上
+        - nvm install 20
+        - nvm use 20
+        - node --version
+        # 不用 npm ci：Amplify 套件的內嵌依賴會讓 npm ci 判定鎖定檔不同步而失敗
+        - npm install --no-audit --no-fund
         - npx ampx pipeline-deploy --branch $AWS_BRANCH --app-id $AWS_APP_ID
 frontend:
   phases:
     build:
       commands:
+        - nvm use 20
         - npm run build
   artifacts:
     baseDirectory: dist
@@ -16,5 +22,4 @@ frontend:
       - '**/*'
   cache:
     paths:
-      - .npm/**/*
       - node_modules/**/*

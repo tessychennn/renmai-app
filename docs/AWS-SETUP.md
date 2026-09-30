@@ -27,8 +27,16 @@
 6. 建置設定會自動抓到專案裡的 `amplify.yml`，直接 Next → **Save and deploy**。
 7. 等待約 5 到 10 分鐘，直到 Provision、Build、Deploy、Verify 全部打勾。
 
-如果建置失敗且訊息提到 Node 版本：Amplify → Hosting → Build settings → Build image settings，
-把 Node.js 版本設成 20，再重新部署。
+### 建置失敗時
+
+Amplify → 你的 app → 分支 `main` → 點失敗的那次建置 → 展開紅色叉叉的那一步（Provision、Build 或 Deploy）→
+複製最後幾十行的紅色錯誤訊息。常見原因：
+
+- **`npm ci` 報 `Missing ... from lock file`**：已用 `amplify.yml` 裡的 `npm install` 避開，不需處理。
+- **Node 版本太舊**：`amplify.yml` 已固定用 Node 20。
+- **權限不足（AccessDenied、no permission）**：建立 app 時要讓 Amplify 建立或選用服務角色
+  （Service role）；也可到 Amplify → Hosting → App settings → General settings 檢查 Service role 是否已設定。
+- **重新部署**：修好後在同一頁按 Redeploy this version，或直接 push 一個新 commit。
 
 > Amplify 也會替網站放一份在 `xxx.amplifyapp.com`。**不要用那個網址**，
 > 不同網址的資料是分開的，你們繼續用 Vercel 的網址。
