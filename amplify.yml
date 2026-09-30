@@ -9,7 +9,7 @@ backend:
         - node --version
         # 不用 npm ci：Amplify 套件的內嵌依賴會讓 npm ci 判定鎖定檔不同步而失敗
         - npm install --no-audit --no-fund
-        - npx ampx pipeline-deploy --branch $AWS_BRANCH --app-id $AWS_APP_ID
+        - npx ampx pipeline-deploy --branch $AWS_BRANCH --app-id $AWS_APP_ID --debug
 frontend:
   phases:
     build:
