@@ -27,6 +27,34 @@
 6. 建置設定會自動抓到專案裡的 `amplify.yml`，直接 Next → **Save and deploy**。
 7. 等待約 5 到 10 分鐘，直到 Provision、Build、Deploy、Verify 全部打勾。
 
+### 部署用 IAM 角色
+
+1. IAM → Roles → Create role → AWS service → Use case 選 **Amplify - Backend Deployment**，
+   名稱 `AmplifyBackendDeployRole`。
+2. 確認附有 **AmplifyBackendDeployFullAccess**（或 AdministratorAccess-Amplify）。
+3. 再加一個 inline policy（名稱 `CdkBootstrapAccess`），讓 CDK 能讀取初始化狀態並切換到自己的部署角色，
+   缺少時會出現 `not authorized to perform: ssm:GetParameter`：
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["ssm:GetParameter", "ssm:GetParameters"],
+      "Resource": "arn:aws:ssm:*:*:parameter/cdk-bootstrap/*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": "sts:AssumeRole",
+      "Resource": "arn:aws:iam::*:role/cdk-*"
+    }
+  ]
+}
+```
+
+4. Amplify → App settings → General settings → Edit → Service role 選這個角色。
+
 ### 建置失敗時
 
 Amplify → 你的 app → 分支 `main` → 點失敗的那次建置 → 展開紅色叉叉的那一步（Provision、Build 或 Deploy）→
@@ -34,8 +62,10 @@ Amplify → 你的 app → 分支 `main` → 點失敗的那次建置 → 展開
 
 - **`npm ci` 報 `Missing ... from lock file`**：已用 `amplify.yml` 裡的 `npm install` 避開，不需處理。
 - **Node 版本太舊**：`amplify.yml` 已固定用 Node 20。
-- **權限不足（AccessDenied、no permission）**：建立 app 時要讓 Amplify 建立或選用服務角色
-  （Service role）；也可到 Amplify → Hosting → App settings → General settings 檢查 Service role 是否已設定。
+- **權限不足（AccessDenied、no permission）**：Amplify 需要一個「部署後端」用的服務角色
+  （Service role），到 Amplify → Hosting → App settings → General settings 檢查。
+  不要用 `AmplifySSRLoggingRole`，那只是寫網站日誌用的，沒有建立後端的權限。
+  自己建立角色的方式見下面「部署用 IAM 角色」。
 - **重新部署**：修好後在同一頁按 Redeploy this version，或直接 push 一個新 commit。
 
 > Amplify 也會替網站放一份在 `xxx.amplifyapp.com`。**不要用那個網址**，
