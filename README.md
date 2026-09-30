@@ -25,3 +25,12 @@ npm run dev
 5. 從主畫面圖示啟動，確認是全螢幕、沒有網址列
 
 ⚠️ 資料只存在這支手機上，記得定期在設定頁匯出備份。
+
+## 雲端同步（兩人共用）
+
+專案內含 AWS Amplify 後端定義（`amplify/`）。沒有 `amplify_outputs.json` 時雲端功能關閉，App 維持純本機。
+部署步驟見 [docs/AWS-SETUP.md](./docs/AWS-SETUP.md)。
+
+```bash
+npm test   # 含同步引擎的單元測試（假雲端＋兩台模擬裝置）
+```

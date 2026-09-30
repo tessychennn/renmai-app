@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import PersonCard from '../components/PersonCard';
+import SyncDot from '../components/SyncDot';
 import Toast from '../components/Toast';
 import { groupRepo, personRepo, settingsRepo } from '../data';
 import { isBackupStale } from '../lib/backup';
+import { syncEvents } from '../sync/manager';
 import type { Group, Person, PersonSort } from '../data/types';
 
 const SORT_OPTIONS: { value: PersonSort; label: string }[] = [
@@ -43,16 +45,24 @@ export default function HomePage() {
     return () => clearTimeout(timer);
   }, [toast]);
 
+  // 另一支手機的變動同步進來後，重新載入列表
+  const [syncTick, setSyncTick] = useState(0);
+  useEffect(() => {
+    const onSynced = () => setSyncTick((t) => t + 1);
+    syncEvents.addEventListener('synced', onSynced);
+    return () => syncEvents.removeEventListener('synced', onSynced);
+  }, []);
+
   useEffect(() => {
     void groupRepo.list().then(setGroups);
     void settingsRepo.get().then((s) => setBackupStale(isBackupStale(s.lastExportAt)));
-  }, []);
+  }, [syncTick]);
 
   useEffect(() => {
     void personRepo
       .list({ search: search || undefined, groupIds: selectedGroupIds, sort: sortKey })
       .then(setPersons);
-  }, [search, selectedGroupIds, sortKey]);
+  }, [search, selectedGroupIds, sortKey, syncTick]);
 
   const changeSort = (value: PersonSort) => {
     setSortKey(value);
@@ -77,7 +87,10 @@ export default function HomePage() {
         style={{ paddingTop: 'env(safe-area-inset-top)' }}
       >
         <div className="flex items-center justify-between px-5 pt-3 pb-2">
-          <h1 className="text-2xl font-semibold">人脈記錄</h1>
+          <h1 className="flex items-center gap-2 text-2xl font-semibold">
+            人脈記錄
+            <SyncDot />
+          </h1>
           <Link
             to="/settings"
             aria-label="設定"

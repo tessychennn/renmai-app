@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import ConfirmSheet from '../components/ConfirmSheet';
 import GlassHeader, { HEADER_PAD } from '../components/GlassHeader';
+import CloudSection from '../cloud/CloudSection';
+import { cloudEnabled } from '../cloud/config';
 import { clearAllData, settingsRepo } from '../data';
 import { exportAndDownload, importBackup, isBackupStale } from '../lib/backup';
 import type { Settings } from '../data/types';
@@ -43,10 +45,14 @@ export default function SettingsPage() {
     setBusy(true);
     setMessage('');
     try {
-      await exportAndDownload();
+      const { skippedPhotos } = await exportAndDownload();
       const next = await settingsRepo.get();
       setSettings(next);
-      setMessage('已匯出。iPhone 上會跳出分享選單，可存到「檔案」或雲端硬碟。');
+      setMessage(
+        skippedPhotos > 0
+          ? `已匯出，但有 ${skippedPhotos} 張照片還沒下載到這支手機，沒有放進備份。連上網路同步、逐張點開後再匯出一次才會完整。`
+          : '已匯出。iPhone 上會跳出分享選單，可存到「檔案」或雲端硬碟。'
+      );
     } catch (e) {
       setMessage(e instanceof Error ? e.message : '匯出失敗，請再試一次。');
     } finally {
@@ -73,7 +79,7 @@ export default function SettingsPage() {
     setDeleteStep(0);
     setBusy(true);
     await clearAllData();
-    navigate('/', { state: { toast: '已刪除所有資料' } });
+    navigate('/', { state: { toast: cloudEnabled ? '已清除這支手機上的資料' : '已刪除所有資料' } });
   };
 
   return (
@@ -103,10 +109,14 @@ export default function SettingsPage() {
           </label>
         </section>
 
+        {cloudEnabled && <CloudSection cardClass={cardClass} />}
+
         <section className={cardClass}>
           <p className="font-medium">備份</p>
           <p className="mt-0.5 text-sm text-ink-2">
-            資料只存在這支手機上，記得定期匯出備份。
+            {cloudEnabled
+              ? '資料會同步到雲端，但仍建議偶爾匯出一份備份存起來。'
+              : '資料只存在這支手機上，記得定期匯出備份。'}
           </p>
           {settings && (
             <p
@@ -164,7 +174,7 @@ export default function SettingsPage() {
             disabled={busy}
             className="mt-3 block py-1 font-medium text-danger disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-danger"
           >
-            刪除所有資料
+            {cloudEnabled ? '清除這支手機上的資料' : '刪除所有資料'}
           </button>
         </section>
       </main>
@@ -172,18 +182,35 @@ export default function SettingsPage() {
       <ConfirmSheet
         open={importFile !== null}
         title="匯入備份"
-        message="「合併」保留現有資料，重複的以較新版本為準；「取代」會先清空再匯入。"
+        message={
+          cloudEnabled
+            ? '會與現有資料合併，重複的以較新版本為準，並同步到雲端。'
+            : '「合併」保留現有資料，重複的以較新版本為準；「取代」會先清空再匯入。'
+        }
         actions={[
           { label: '合併', onClick: () => void doImport('merge') },
-          { label: '取代（清空後匯入）', danger: true, onClick: () => void doImport('replace') },
+          // 雲端模式下「取代」沒有意義：清空後下次同步又會從雲端全部拉回來
+          ...(cloudEnabled
+            ? []
+            : [
+                {
+                  label: '取代（清空後匯入）',
+                  danger: true,
+                  onClick: () => void doImport('replace'),
+                },
+              ]),
         ]}
         onClose={() => setImportFile(null)}
       />
 
       <ConfirmSheet
         open={deleteStep === 1}
-        title="刪除所有資料？"
-        message="所有人物、照片、分組都會消失。"
+        title={cloudEnabled ? '清除這支手機上的資料？' : '刪除所有資料？'}
+        message={
+          cloudEnabled
+            ? '只會清除這支手機。雲端和另一位的資料不受影響，下次同步會重新下載。'
+            : '所有人物、照片、分組都會消失。'
+        }
         actions={[{ label: '繼續', danger: true, onClick: () => setDeleteStep(2) }]}
         onClose={() => setDeleteStep(0)}
       />
@@ -192,7 +219,13 @@ export default function SettingsPage() {
         open={deleteStep === 2}
         title="真的確定嗎？"
         message="此動作無法復原。如果還沒匯出備份，現在取消還來得及。"
-        actions={[{ label: '刪除所有資料', danger: true, onClick: () => void doDeleteAll() }]}
+        actions={[
+          {
+            label: cloudEnabled ? '清除本機資料' : '刪除所有資料',
+            danger: true,
+            onClick: () => void doDeleteAll(),
+          },
+        ]}
         onClose={() => setDeleteStep(0)}
       />
     </div>

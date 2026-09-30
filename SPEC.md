@@ -374,6 +374,16 @@ if (navigator.storage?.persist) await navigator.storage.persist();
 
 ---
 
+## 11.5 雲端同步（兩人共用，已實作於 `cloud-sync` 分支）
+
+第 10 節的「不要現在寫同步」條件已不成立：使用者確認有兩人共用需求且有 AWS。設計如下，細節見 `docs/AWS-SETUP.md`：
+
+- **本機優先**：IndexedDB 仍是工作資料，離線可用；雲端在背景同步。展覽現場收訊差，不能依賴網路。
+- **後端**：AWS Amplify Gen 2（Cognito 登入、AppSync＋DynamoDB、S3），東京區域。關閉自行註冊，只有管理員建立的兩個帳號能登入。
+- **同步策略**：全量拉取＋上傳待上傳的變動；`updatedAt` 較新者整筆勝出；刪除用墓碑（`deletedAt`，不留個資）；先傳照片再傳人物；縮圖先下載、完整版點開才下載。
+- **開關**：沒有 `amplify_outputs.json` 時雲端關閉，App 行為與純本機版完全相同。
+- **不同步**：設定（目前場合、上次匯出時間）維持每支手機各自的。
+
 ## 12. 建議實作順序
 
 1. 專案骨架、Tailwind、HashRouter、PWA manifest → 先確認 iPhone 裝得起來
