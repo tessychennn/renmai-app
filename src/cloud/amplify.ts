@@ -189,7 +189,9 @@ export function createRemoteStore(): RemoteStore {
         // 有合作資料的人先不上傳（標記留著，後端更新後自動補傳）；沒有的人照常上傳，不帶新欄位
         if (hasCollabData(p)) {
           throw new Error(
-            '雲端後端還沒更新到「合作機會」欄位，請照文件重新下載並更新 amplify_outputs.json。這支手機的資料都還在，更新後會自動同步。'
+            `這支手機上的 App（版本 ${__APP_VERSION__}）用的連線設定還不含「合作機會」欄位。` +
+              '如果已經換過 amplify_outputs.json 並 push，請等部署完成後，把 App 完全關掉再開；' +
+              '還沒換的話請先下載新檔。手機上的資料都還在，更新後會自動同步。'
           );
         }
         fields = withoutCollab as typeof fields;

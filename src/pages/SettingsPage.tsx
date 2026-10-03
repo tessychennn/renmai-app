@@ -177,6 +177,8 @@ export default function SettingsPage() {
             {cloudEnabled ? '清除這支手機上的資料' : '刪除所有資料'}
           </button>
         </section>
+
+        <p className="text-center text-xs text-ink-2">版本 {__APP_VERSION__}</p>
       </main>
 
       <ConfirmSheet
