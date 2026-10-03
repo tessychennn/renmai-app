@@ -103,6 +103,27 @@
               "isRequired": false,
               "attributes": []
             },
+            "collabStatus": {
+              "name": "collabStatus",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            },
+            "collabOwner": {
+              "name": "collabOwner",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            },
+            "collabNote": {
+              "name": "collabNote",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            },
             "clientCreatedAt": {
               "name": "clientCreatedAt",
               "isArray": false,
