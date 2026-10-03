@@ -4,6 +4,7 @@ import ConfirmSheet from '../components/ConfirmSheet';
 import GlassHeader, { HEADER_PAD } from '../components/GlassHeader';
 import { deletePersonWithPhotos, groupRepo, personRepo } from '../data';
 import { usePhotoURL } from '../hooks/usePhotoURL';
+import { statusLabel } from '../lib/collab';
 import type { Group, Person } from '../data/types';
 
 function PhotoSlide({ photoId }: { photoId: string }) {
@@ -64,6 +65,11 @@ export default function PersonDetailPage() {
   if (person.occasion) rows.push({ label: '場合', value: person.occasion });
   if (person.metDate) rows.push({ label: '認識日期', value: formatDate(person.metDate) });
   if (person.lineName) rows.push({ label: '聯絡帳號', value: person.lineName });
+  if (person.collabStatus) {
+    rows.push({ label: '合作狀態', value: statusLabel(person.collabStatus) });
+    if (person.collabOwner) rows.push({ label: '負責人', value: person.collabOwner });
+    if (person.collabNote) rows.push({ label: '合作備註', value: person.collabNote });
+  }
 
   return (
     <div className="min-h-dvh">

@@ -38,6 +38,14 @@ body {
   }
 }
 
+/* 長按卡片時不要跳出 iOS 的連結預覽／圖片選單，也不要選到文字 */
+.no-callout,
+.no-callout * {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 /* iOS 輸入框字級低於 16px 會在聚焦時放大整頁 */
 input,
 textarea,

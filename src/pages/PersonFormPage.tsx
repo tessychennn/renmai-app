@@ -3,8 +3,9 @@ import { useNavigate, useParams } from 'react-router-dom';
 import CropModal, { type CropResult } from '../components/CropModal';
 import GlassHeader, { HEADER_PAD } from '../components/GlassHeader';
 import { groupRepo, personRepo, photoRepo, settingsRepo } from '../data';
+import { COLLAB_OWNERS, COLLAB_STATUSES } from '../lib/collab';
 import { preloadScanner } from '../lib/documentScan';
-import type { Group, Person } from '../data/types';
+import type { CollabOwner, CollabStatus, Group, Person } from '../data/types';
 
 interface StagedPhoto {
   key: string;
@@ -45,6 +46,9 @@ export default function PersonFormPage() {
   const [note, setNote] = useState('');
   const [lineName, setLineName] = useState('');
   const [showMore, setShowMore] = useState(false);
+  const [collabStatus, setCollabStatus] = useState<CollabStatus | undefined>();
+  const [collabOwner, setCollabOwner] = useState<CollabOwner | undefined>();
+  const [collabNote, setCollabNote] = useState('');
   const [groups, setGroups] = useState<Group[]>([]);
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
   const [photos, setPhotos] = useState<StagedPhoto[]>([]);
@@ -71,6 +75,9 @@ export default function PersonFormPage() {
         setMetDate(person.metDate ?? '');
         setNote(person.note ?? '');
         setLineName(person.lineName ?? '');
+        setCollabStatus(person.collabStatus);
+        setCollabOwner(person.collabOwner);
+        setCollabNote(person.collabNote ?? '');
         if (person.lineName) setShowMore(true);
         setSelectedGroupIds(person.groupIds);
         const staged: StagedPhoto[] = [];
@@ -209,6 +216,10 @@ export default function PersonFormPage() {
         occasion: occasion.trim() || undefined,
         metDate: metDate || undefined,
         note: note.trim() || undefined,
+        // 沒有狀態就不在合作列表裡，負責人和備註跟著清掉
+        collabStatus,
+        collabOwner: collabStatus ? collabOwner : undefined,
+        collabNote: collabStatus ? collabNote.trim() || undefined : undefined,
         createdAt: source?.createdAt ?? now,
         updatedAt: now,
       };
@@ -441,6 +452,65 @@ export default function PersonFormPage() {
               </button>
             )}
           </div>
+        </section>
+
+        <section>
+          <span className="mb-1.5 block text-sm text-ink-2">合作機會</span>
+          <div className="flex flex-wrap gap-2">
+            {[{ value: undefined, label: '不列入' }, ...COLLAB_STATUSES].map((s) => {
+              const active = collabStatus === s.value;
+              return (
+                <button
+                  key={s.label}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => setCollabStatus(s.value)}
+                  className={`rounded-full border-[0.5px] px-3 py-1.5 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink ${
+                    active ? 'border-ink bg-ink text-white' : 'border-hairline bg-white text-ink'
+                  }`}
+                >
+                  {s.label}
+                </button>
+              );
+            })}
+          </div>
+          {collabStatus && (
+            <div className="mt-3 flex flex-col gap-3">
+              <div>
+                <span className="mb-1.5 block text-sm text-ink-2">負責人</span>
+                <div className="flex flex-wrap gap-2">
+                  {[...COLLAB_OWNERS, undefined].map((o) => {
+                    const active = collabOwner === o;
+                    return (
+                      <button
+                        key={o ?? 'none'}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => setCollabOwner(o)}
+                        className={`rounded-full border-[0.5px] px-3 py-1.5 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink ${
+                          active
+                            ? 'border-ink bg-ink text-white'
+                            : 'border-hairline bg-white text-ink'
+                        }`}
+                      >
+                        {o ?? '未指定'}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <label className="block">
+                <span className="mb-1.5 block text-sm text-ink-2">合作備註</span>
+                <textarea
+                  value={collabNote}
+                  onChange={(e) => setCollabNote(e.target.value)}
+                  rows={2}
+                  placeholder="例：下週三 14:00 視訊，先準備報價"
+                  className={fieldClass}
+                />
+              </label>
+            </div>
+          )}
         </section>
 
         <label className="block">

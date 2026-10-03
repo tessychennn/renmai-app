@@ -14,6 +14,10 @@ const schema = a.schema({
       occasion: a.string(),
       metDate: a.string(),
       note: a.string(),
+      // 合作機會：用字串存，值的範圍由 App 端把關（之後加狀態不用動後端）
+      collabStatus: a.string(),
+      collabOwner: a.string(),
+      collabNote: a.string(),
       clientCreatedAt: a.string().required(),
       clientUpdatedAt: a.string().required(),
       deletedAt: a.string(),

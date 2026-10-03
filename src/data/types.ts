@@ -8,11 +8,19 @@ export interface Person {
   occasion?: string;
   metDate?: string; // ISO date，預設今天
   note?: string;
+  /** 合作機會：有狀態就代表被標記，會出現在「合作機會」頁；沒有就不在列表裡 */
+  collabStatus?: CollabStatus;
+  collabOwner?: CollabOwner;
+  /** 合作專用備註，和上面一般的 note 分開 */
+  collabNote?: string;
   createdAt: string;
   updatedAt: string;
   /** 軟刪除標記：同步時要讓另一支手機知道這筆被刪了，所以不能直接消失 */
   deletedAt?: string;
 }
+
+export type CollabStatus = 'contact' | 'contacting' | 'scheduled' | 'done';
+export type CollabOwner = 'Tessy' | 'Serina';
 
 export interface Group {
   id: string;

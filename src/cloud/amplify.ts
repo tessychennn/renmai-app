@@ -15,6 +15,7 @@ import type { Group, Person } from '../data/types';
 import { AuthRequiredError } from '../sync/errors';
 import type { RemoteStore } from '../sync/types';
 import { amplifyOutputs } from './config';
+import { groupToFields, hasCollabData, personToFields, rowToGroup, rowToPerson } from './mapping';
 
 let configured = false;
 
@@ -123,35 +124,18 @@ function mapError(e: unknown): unknown {
   return e;
 }
 
-const strings = (values: readonly (string | null)[] | null | undefined): string[] =>
-  (values ?? []).filter((v): v is string => v !== null);
-
-function toPerson(row: Schema['Person']['type']): Person {
-  return {
-    id: row.id,
-    displayName: row.displayName,
-    lineName: row.lineName ?? undefined,
-    avatarPhotoId: row.avatarPhotoId ?? undefined,
-    photoIds: strings(row.photoIds),
-    groupIds: strings(row.groupIds),
-    occasion: row.occasion ?? undefined,
-    metDate: row.metDate ?? undefined,
-    note: row.note ?? undefined,
-    createdAt: row.clientCreatedAt,
-    updatedAt: row.clientUpdatedAt,
-    deletedAt: row.deletedAt ?? undefined,
-  };
-}
-
-function toGroup(row: Schema['Group']['type']): Group {
-  return {
-    id: row.id,
-    name: row.name,
-    color: row.color,
-    order: row.order,
-    updatedAt: row.clientUpdatedAt,
-    deletedAt: row.deletedAt ?? undefined,
-  };
+/**
+ * 目前連線的後端是否已有合作機會欄位（看 amplify_outputs.json 裡的資料表描述）。
+ * 後端還沒更新或 outputs 還是舊的時，Amplify 用舊描述組查詢，新欄位會被默默丟掉；
+ * 如果這時照常上傳，本機會以為已經同步成功，合作狀態就永遠到不了雲端。
+ */
+function backendSupportsCollab(): boolean {
+  const models = (
+    amplifyOutputs as
+      | { data?: { model_introspection?: { models?: Record<string, { fields?: Record<string, unknown> }> } } }
+      | undefined
+  )?.data?.model_introspection?.models;
+  return Boolean(models?.Person?.fields?.collabStatus);
 }
 
 const photoPath = (id: string, variant: 'full' | 'thumb') => `photos/${id}/${variant}.jpg`;
@@ -173,7 +157,7 @@ export function createRemoteStore(): RemoteStore {
         do {
           const res = await client.models.Person.list({ limit: 500, nextToken });
           assertOk(res.errors);
-          out.push(...res.data.map(toPerson));
+          out.push(...res.data.map(rowToPerson));
           nextToken = res.nextToken;
         } while (nextToken);
       } catch (e) {
@@ -189,7 +173,7 @@ export function createRemoteStore(): RemoteStore {
         do {
           const res = await client.models.Group.list({ limit: 500, nextToken });
           assertOk(res.errors);
-          out.push(...res.data.map(toGroup));
+          out.push(...res.data.map(rowToGroup));
           nextToken = res.nextToken;
         } while (nextToken);
       } catch (e) {
@@ -199,20 +183,17 @@ export function createRemoteStore(): RemoteStore {
     },
 
     async putPerson(p) {
-      // 欄位一律明確送出（沒有的送 null），使用者清掉場合／備註時才會真的清掉雲端的值
-      const fields = {
-        displayName: p.displayName,
-        lineName: p.lineName ?? null,
-        avatarPhotoId: p.avatarPhotoId ?? null,
-        photoIds: p.photoIds,
-        groupIds: p.groupIds,
-        occasion: p.occasion ?? null,
-        metDate: p.metDate ?? null,
-        note: p.note ?? null,
-        clientCreatedAt: p.createdAt,
-        clientUpdatedAt: p.updatedAt,
-        deletedAt: p.deletedAt ?? null,
-      };
+      const { collabStatus, collabOwner, collabNote, ...withoutCollab } = personToFields(p);
+      let fields = { ...withoutCollab, collabStatus, collabOwner, collabNote };
+      if (!backendSupportsCollab()) {
+        // 有合作資料的人先不上傳（標記留著，後端更新後自動補傳）；沒有的人照常上傳，不帶新欄位
+        if (hasCollabData(p)) {
+          throw new Error(
+            '雲端後端還沒更新到「合作機會」欄位，請照文件重新下載並更新 amplify_outputs.json。這支手機的資料都還在，更新後會自動同步。'
+          );
+        }
+        fields = withoutCollab as typeof fields;
+      }
       try {
         const existing = await client.models.Person.get({ id: p.id });
         assertOk(existing.errors);
@@ -226,13 +207,7 @@ export function createRemoteStore(): RemoteStore {
     },
 
     async putGroup(g) {
-      const fields = {
-        name: g.name,
-        color: g.color,
-        order: g.order,
-        clientUpdatedAt: g.updatedAt,
-        deletedAt: g.deletedAt ?? null,
-      };
+      const fields = groupToFields(g);
       try {
         const existing = await client.models.Group.get({ id: g.id });
         assertOk(existing.errors);

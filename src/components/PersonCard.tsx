@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useLongPress } from '../hooks/useLongPress';
 import { usePhotoURL } from '../hooks/usePhotoURL';
 import type { Group, Person } from '../data/types';
+import StatusChip from './StatusChip';
 
 /** 卡片進入視窗附近才回傳 true（之後維持 true）。人數多時避免一次讀取幾百張縮圖。 */
 function useNearViewport<T extends Element>(): [React.RefObject<T>, boolean] {
@@ -37,9 +39,19 @@ function firstSentence(note?: string): string | undefined {
     .find(Boolean);
 }
 
-export default function PersonCard({ person, groups }: { person: Person; groups: Group[] }) {
+export default function PersonCard({
+  person,
+  groups,
+  onLongPress,
+}: {
+  person: Person;
+  groups: Group[];
+  /** 長按人物卡（桌面為右鍵）：首頁用來開啟合作狀態選單 */
+  onLongPress?: (person: Person) => void;
+}) {
   const avatarId = person.avatarPhotoId ?? person.photoIds[0];
   const [cardRef, near] = useNearViewport<HTMLAnchorElement>();
+  const press = useLongPress(() => onLongPress?.(person));
   const url = usePhotoURL(near ? avatarId : undefined, 'thumb');
   // 備註第一句優先；沒寫備註就退回顯示場合
   const subtitle = firstSentence(person.note) ?? person.occasion;
@@ -51,11 +63,18 @@ export default function PersonCard({ person, groups }: { person: Person; groups:
     <Link
       ref={cardRef}
       to={`/person/${person.id}`}
-      className="block overflow-hidden rounded-2xl border-[0.5px] border-hairline bg-white shadow-[0_1px_3px_rgba(0,0,0,0.06)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink"
+      {...(onLongPress ? press : {})}
+      className="no-callout block overflow-hidden rounded-2xl border-[0.5px] border-hairline bg-white shadow-[0_1px_3px_rgba(0,0,0,0.06)] transition-transform active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink"
     >
-      <div className="aspect-square w-full bg-ground">
+      <div className="relative aspect-square w-full bg-ground">
+        {person.collabStatus && (
+          <StatusChip
+            status={person.collabStatus}
+            className="absolute left-2 top-2 z-10 shadow-[0_1px_4px_rgba(0,0,0,0.2)]"
+          />
+        )}
         {url ? (
-          <img src={url} alt="" className="h-full w-full object-cover" />
+          <img src={url} alt="" draggable={false} className="h-full w-full object-cover" />
         ) : (
           <div
             aria-hidden="true"

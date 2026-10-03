@@ -156,6 +156,47 @@ describe('雲端同步', () => {
     expect(remote.persons.get('p1')?.note).toBe('B 的修改');
   });
 
+  it('合作狀態、負責人、備註會同步到另一支手機；移出列表後也同步', async () => {
+    await useDevice('A');
+    await personRepo.save(person());
+    await syncNow();
+    await useDevice('B');
+    await syncNow();
+
+    // B 標記成「聯絡中」並指定負責人
+    await personRepo.save(
+      person({
+        collabStatus: 'contacting',
+        collabOwner: 'Serina',
+        collabNote: '下週三視訊',
+        updatedAt: '2026-09-05T00:00:00.000Z',
+      })
+    );
+    await syncNow();
+    expect(remote.persons.get('p1')).toMatchObject({
+      collabStatus: 'contacting',
+      collabOwner: 'Serina',
+      collabNote: '下週三視訊',
+    });
+
+    await useDevice('A');
+    await syncNow();
+    expect(await personRepo.get('p1')).toMatchObject({
+      collabStatus: 'contacting',
+      collabOwner: 'Serina',
+      collabNote: '下週三視訊',
+    });
+
+    // A 把他移出合作列表
+    await personRepo.save(person({ updatedAt: '2026-09-06T00:00:00.000Z' }));
+    await syncNow();
+    await useDevice('B');
+    await syncNow();
+    const afterRemove = await personRepo.get('p1');
+    expect(afterRemove?.collabStatus).toBeUndefined();
+    expect(afterRemove?.collabNote).toBeUndefined();
+  });
+
   it('本機較新的資料不會被較舊的雲端版本蓋掉', async () => {
     await useDevice('A');
     await personRepo.save(person({ note: '雲端舊版', updatedAt: '2026-09-02T00:00:00.000Z' }));
@@ -172,7 +213,15 @@ describe('雲端同步', () => {
     await useDevice('A');
     const photoId = await photoRepo.put(new Blob(['card']));
     await personRepo.save(
-      person({ photoIds: [photoId], note: '私人備註', lineName: 'wang_xm', occasion: '設計週' })
+      person({
+        photoIds: [photoId],
+        note: '私人備註',
+        lineName: 'wang_xm',
+        occasion: '設計週',
+        collabStatus: 'contacting',
+        collabOwner: 'Tessy',
+        collabNote: '報價中',
+      })
     );
     await syncNow();
     await useDevice('B');
@@ -188,6 +237,9 @@ describe('雲端同步', () => {
     expect(tombstone.deletedAt).toBeTruthy();
     expect(tombstone.note).toBeUndefined();
     expect(tombstone.lineName).toBeUndefined();
+    expect(tombstone.collabStatus).toBeUndefined();
+    expect(tombstone.collabOwner).toBeUndefined();
+    expect(tombstone.collabNote).toBeUndefined();
     expect(tombstone.displayName).toBe('');
     expect(remote.photos.has(photoId)).toBe(false);
 

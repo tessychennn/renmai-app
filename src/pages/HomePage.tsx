@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import ChoiceSheet from '../components/ChoiceSheet';
 import PersonCard from '../components/PersonCard';
 import SyncDot from '../components/SyncDot';
+import TabBar from '../components/TabBar';
 import Toast from '../components/Toast';
 import { groupRepo, personRepo, settingsRepo } from '../data';
 import { isBackupStale } from '../lib/backup';
+import { COLLAB_STATUSES, statusLabel, withCollab } from '../lib/collab';
 import { syncEvents } from '../sync/manager';
-import type { Group, Person, PersonSort } from '../data/types';
+import type { CollabStatus, Group, Person, PersonSort } from '../data/types';
 
 const SORT_OPTIONS: { value: PersonSort; label: string }[] = [
   { value: 'createdAt-desc', label: '最近加入' },
@@ -45,10 +48,10 @@ export default function HomePage() {
     return () => clearTimeout(timer);
   }, [toast]);
 
-  // 另一支手機的變動同步進來後，重新載入列表
-  const [syncTick, setSyncTick] = useState(0);
+  // 另一支手機的變動同步進來、或在這頁改了合作狀態後，重新載入列表
+  const [reloadTick, setReloadTick] = useState(0);
   useEffect(() => {
-    const onSynced = () => setSyncTick((t) => t + 1);
+    const onSynced = () => setReloadTick((t) => t + 1);
     syncEvents.addEventListener('synced', onSynced);
     return () => syncEvents.removeEventListener('synced', onSynced);
   }, []);
@@ -56,13 +59,26 @@ export default function HomePage() {
   useEffect(() => {
     void groupRepo.list().then(setGroups);
     void settingsRepo.get().then((s) => setBackupStale(isBackupStale(s.lastExportAt)));
-  }, [syncTick]);
+  }, [reloadTick]);
 
   useEffect(() => {
     void personRepo
       .list({ search: search || undefined, groupIds: selectedGroupIds, sort: sortKey })
       .then(setPersons);
-  }, [search, selectedGroupIds, sortKey, syncTick]);
+  }, [search, selectedGroupIds, sortKey, reloadTick]);
+
+  // 長按人物卡：標記合作狀態
+  const [collabTarget, setCollabTarget] = useState<Person | null>(null);
+  const setCollabStatus = async (person: Person, status: CollabStatus | null) => {
+    await personRepo.save(withCollab(person, { status }));
+    setCollabTarget(null);
+    setReloadTick((t) => t + 1);
+    setToast(
+      status === null
+        ? `已將 ${person.displayName} 移出合作機會`
+        : `${person.displayName}：${statusLabel(status)}`
+    );
+  };
 
   const changeSort = (value: PersonSort) => {
     setSortKey(value);
@@ -153,7 +169,7 @@ export default function HomePage() {
         className="px-5"
         style={{
           paddingTop: 'calc(env(safe-area-inset-top) + 178px)',
-          paddingBottom: 'calc(env(safe-area-inset-bottom) + 96px)',
+          paddingBottom: 'calc(env(safe-area-inset-bottom) + 144px)',
         }}
       >
         {backupStale && persons !== null && persons.length > 0 && (
@@ -181,7 +197,7 @@ export default function HomePage() {
           <ul className="grid grid-cols-2 gap-3">
             {persons.map((person) => (
               <li key={person.id}>
-                <PersonCard person={person} groups={groups} />
+                <PersonCard person={person} groups={groups} onLongPress={setCollabTarget} />
               </li>
             ))}
           </ul>
@@ -192,12 +208,30 @@ export default function HomePage() {
         to="/new"
         aria-label="新增人物"
         className="fixed right-5 z-10 flex h-14 w-14 items-center justify-center rounded-full bg-ink text-white shadow-[0_4px_16px_rgba(0,0,0,0.2)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
-        style={{ bottom: 'calc(env(safe-area-inset-bottom) + 20px)' }}
+        style={{ bottom: 'calc(env(safe-area-inset-bottom) + 76px)' }}
       >
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
         </svg>
       </Link>
+
+      <TabBar />
+
+      <ChoiceSheet
+        open={collabTarget !== null}
+        title={collabTarget ? `${collabTarget.displayName} 的合作狀態` : ''}
+        choices={COLLAB_STATUSES.map((s) => ({
+          label: s.label,
+          selected: collabTarget?.collabStatus === s.value,
+          onClick: () => collabTarget && void setCollabStatus(collabTarget, s.value),
+        }))}
+        footer={
+          collabTarget?.collabStatus
+            ? { label: '移出合作機會', onClick: () => void setCollabStatus(collabTarget, null) }
+            : undefined
+        }
+        onClose={() => setCollabTarget(null)}
+      />
 
       <Toast message={toast} />
     </div>

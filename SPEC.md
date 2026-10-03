@@ -384,6 +384,14 @@ if (navigator.storage?.persist) await navigator.storage.persist();
 - **開關**：沒有 `amplify_outputs.json` 時雲端關閉，App 行為與純本機版完全相同。
 - **不同步**：設定（目前場合、上次匯出時間）維持每支手機各自的。
 
+### 合作機會
+
+- 下方分頁列兩頁：「人脈記錄」（首頁）與「合作機會」。
+- 人物多三個欄位：`collabStatus`（需聯繫／聯繫中／已約時間／完成，有值就代表被標記）、`collabOwner`（Tessy／Serina）、`collabNote`（合作專用備註，和一般備註分開）。
+- 標記方式：首頁長按人物卡開選單；或在人物編輯頁的「合作機會」區塊設定。
+- 合作列表：依狀態排序（需聯繫在前），可依狀態與負責人篩選；列表上直接點狀態、負責人、備註就能改。
+- 雲端：就是人物多幾個欄位，沿用同一套同步。後端欄位更新的順序見 `docs/AWS-SETUP.md`。
+
 ## 12. 建議實作順序
 
 1. 專案骨架、Tailwind、HashRouter、PWA manifest → 先確認 iPhone 裝得起來
