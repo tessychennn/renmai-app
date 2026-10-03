@@ -12,6 +12,7 @@ import {
   COLLAB_STATUSES,
   collabCounts,
   collabList,
+  statusLabel,
   withCollab,
   type CollabFilter,
 } from '../lib/collab';
@@ -159,22 +160,30 @@ export default function CollabPage() {
                 key={person.id}
                 className="rounded-2xl border-[0.5px] border-hairline bg-white p-3 shadow-[0_1px_3px_rgba(0,0,0,0.06)]"
               >
-                <div className="flex items-center gap-3">
+                {/* 同一行由左至右：頭像＋名稱、負責人、狀態 */}
+                <div className="flex items-center gap-2">
                   <Link
                     to={`/person/${person.id}`}
                     className="flex min-w-0 flex-1 items-center gap-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink"
                   >
                     <Thumb person={person} />
-                    <span className="min-w-0">
-                      <span className="block truncate font-medium">{person.displayName}</span>
-                      {person.occasion && (
-                        <span className="block truncate text-sm text-ink-2">{person.occasion}</span>
-                      )}
-                    </span>
+                    <span className="min-w-0 truncate font-medium">{person.displayName}</span>
                   </Link>
                   <button
                     type="button"
-                    aria-label={`${person.displayName} 的狀態，點一下修改`}
+                    aria-label={`負責人：${person.collabOwner ?? '未指定'}，點一下修改`}
+                    onClick={() => setEditing({ person, field: 'owner' })}
+                    className={`shrink-0 whitespace-nowrap rounded-full border-[0.5px] px-2.5 py-0.5 text-xs font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink ${
+                      person.collabOwner
+                        ? 'border-ink/25 bg-white text-ink'
+                        : 'border-dashed border-hairline bg-white text-ink-2'
+                    }`}
+                  >
+                    {person.collabOwner ?? '未指定'}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`狀態：${statusLabel(person.collabStatus!)}，點一下修改`}
                     onClick={() => setEditing({ person, field: 'status' })}
                     className="shrink-0 rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
                   >
@@ -182,25 +191,10 @@ export default function CollabPage() {
                   </button>
                 </div>
 
-                <div className="mt-3 flex items-center gap-2 text-sm">
-                  <span className="text-ink-2">負責人</span>
-                  <button
-                    type="button"
-                    onClick={() => setEditing({ person, field: 'owner' })}
-                    className={`rounded-full border-[0.5px] px-2.5 py-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink ${
-                      person.collabOwner
-                        ? 'border-ink/25 text-ink'
-                        : 'border-dashed border-hairline text-ink-2'
-                    }`}
-                  >
-                    {person.collabOwner ?? '未指定'}
-                  </button>
-                </div>
-
                 <button
                   type="button"
                   onClick={() => setEditing({ person, field: 'note' })}
-                  className="mt-2 block w-full rounded-lg bg-ground px-3 py-2 text-left text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink"
+                  className="mt-3 block w-full rounded-lg bg-ground px-3 py-2 text-left text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink"
                 >
                   {person.collabNote ? (
                     <span className="whitespace-pre-wrap">{person.collabNote}</span>

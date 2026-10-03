@@ -1,4 +1,5 @@
 import { useRef } from 'react';
+import { hapticTick } from '../lib/haptics';
 
 /**
  * 長按偵測（觸控與滑鼠都可，桌面右鍵也算）。
@@ -18,6 +19,7 @@ export function useLongPress(onLongPress: () => void, delayMs = 450) {
   const trigger = () => {
     fired.current = true;
     cancel();
+    hapticTick(); // 手指還按著的當下給一下震動，確認「已經長按成功」
     onLongPress();
   };
 
