@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import { hapticTick } from '../lib/haptics';
+import { hapticTick, hapticTickOnRelease } from '../lib/haptics';
 
 /**
  * 長按偵測（觸控與滑鼠都可，桌面右鍵也算）。
@@ -34,7 +34,10 @@ export function useLongPress(onLongPress: () => void, delayMs = 450) {
       if (!origin.current) return;
       if (Math.hypot(e.clientX - origin.current.x, e.clientY - origin.current.y) > 10) cancel();
     },
-    onPointerUp: cancel,
+    onPointerUp: () => {
+      if (fired.current) hapticTickOnRelease();
+      cancel();
+    },
     onPointerCancel: cancel,
     onPointerLeave: cancel,
     // 擋掉瀏覽器原生選單；桌面右鍵直接當長按

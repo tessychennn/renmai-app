@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { hapticTick } from './haptics';
+import { hapticTick, hapticTickOnRelease } from './haptics';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -16,6 +16,16 @@ describe('觸覺回饋', () => {
   it('什麼都不支援（沒有 vibrate、沒有 document）時不會丟錯', () => {
     vi.stubGlobal('navigator', {});
     expect(() => hapticTick()).not.toThrow();
+  });
+
+  it('放開時的補充觸覺：有 vibrate 的裝置不再重複震動，什麼都不支援時也不丟錯', () => {
+    const vibrate = vi.fn(() => true);
+    vi.stubGlobal('navigator', { vibrate });
+    hapticTickOnRelease();
+    expect(vibrate).not.toHaveBeenCalled();
+
+    vi.stubGlobal('navigator', {});
+    expect(() => hapticTickOnRelease()).not.toThrow();
   });
 
   it('vibrate 本身丟錯也不會影響操作', () => {

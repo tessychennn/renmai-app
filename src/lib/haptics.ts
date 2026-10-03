@@ -25,6 +25,20 @@ function iosSwitchTick(): void {
   switchLabel.click();
 }
 
+/**
+ * 手指放開時補一下，只在沒有 vibrate 的裝置（也就是 iPhone）。
+ * iPhone 只在「真正的使用者操作事件」（放開手指、點擊）裡放行觸覺；
+ * 長按是計時器在按住 0.45 秒後觸發的，常被擋掉，放開手指這一刻比較可能成功。
+ */
+export function hapticTickOnRelease(): void {
+  try {
+    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') return;
+    iosSwitchTick();
+  } catch {
+    // 同上，觸覺失敗不影響操作
+  }
+}
+
 /** 輕微一下：用在長按觸發的瞬間，讓手指知道「已經按下去了」 */
 export function hapticTick(): void {
   try {
