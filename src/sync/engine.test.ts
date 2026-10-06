@@ -6,6 +6,7 @@ import { closeDB, getDB } from '../data/indexeddb/db';
 import { IndexedDBGroupRepo } from '../data/indexeddb/groupRepo';
 import { IndexedDBPersonRepo } from '../data/indexeddb/personRepo';
 import { IndexedDBPhotoRepo, setPhotoTransport } from '../data/indexeddb/photoRepo';
+import { ensureDefaultGroups } from '../data/indexeddb/seedGroups';
 import { IndexedDBSyncLocal } from '../data/indexeddb/syncLocal';
 import type { Group, Person } from '../data/types';
 import { runSync } from './engine';
@@ -283,6 +284,44 @@ describe('雲端同步', () => {
 
     expect(await groupRepo.list()).toEqual([]);
     expect((await personRepo.get('p1'))?.groupIds).toEqual([]);
+  });
+
+  it('兩支手機各自建立預設分組，同步後仍然只有一份', async () => {
+    await useDevice('A');
+    await ensureDefaultGroups();
+    await syncNow();
+    await useDevice('B');
+    await ensureDefaultGroups();
+    await syncNow();
+    await useDevice('A');
+    await syncNow();
+
+    expect(remote.groups.size).toBe(5);
+    expect((await groupRepo.list()).length).toBe(5);
+    await useDevice('B');
+    expect((await groupRepo.list()).map((g) => g.name)).toEqual([
+      '重要人物',
+      '餐飲相關',
+      '食品相關',
+      '品牌設計',
+      '暫無關聯',
+    ]);
+  });
+
+  it('A 刪掉某個預設分組後，全新的 B 啟動補建預設分組，不會把它救回來', async () => {
+    await useDevice('A');
+    await ensureDefaultGroups();
+    await syncNow();
+    vi.setSystemTime(new Date('2026-09-11T00:00:00.000Z'));
+    await groupRepo.remove('group-food');
+    await syncNow();
+
+    await useDevice('B'); // 全新手機
+    await ensureDefaultGroups();
+    await syncNow();
+
+    expect((await groupRepo.list()).map((g) => g.name)).not.toContain('食品相關');
+    expect((await groupRepo.list()).length).toBe(4);
   });
 
   it('上傳失敗時保留待上傳標記，下次同步重試成功', async () => {

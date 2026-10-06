@@ -17,6 +17,7 @@ export const syncLocal: SyncLocal = new IndexedDBSyncLocal();
 export { setPhotoTransport } from './indexeddb/photoRepo';
 
 export { destroyDB as clearAllData } from './indexeddb/db';
+export { ensureDefaultGroups } from './indexeddb/seedGroups';
 
 /** 刪除人物並一併刪除其所有照片（規格 5.3：避免孤兒資料） */
 export async function deletePersonWithPhotos(id: string): Promise<void> {
