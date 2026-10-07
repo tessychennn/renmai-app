@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import ConfirmSheet from '../components/ConfirmSheet';
 import { syncManager } from '../sync/manager';
 import { useSyncState } from '../sync/useSyncState';
-import { clearSignedIn, stopCloudSync } from './start';
+import { signOutAndReload } from './signOutFlow';
 
 function formatDateTime(iso: string): string {
   const d = new Date(iso);
@@ -26,14 +26,6 @@ export default function CloudSection({ cardClass }: { cardClass: string }) {
     error: `同步發生問題：${sync.error ?? '未知錯誤'}`,
     'auth-required': '登入已失效，請重新登入。',
   }[sync.status];
-
-  const signOut = async () => {
-    stopCloudSync();
-    const cloud = await import('./amplify');
-    await cloud.cloudSignOut();
-    clearSignedIn();
-    location.reload();
-  };
 
   return (
     <section className={cardClass}>
@@ -72,7 +64,7 @@ export default function CloudSection({ cardClass }: { cardClass: string }) {
         open={confirmSignOut}
         title="登出？"
         message="這支手機上的資料會保留，但登出後不會再同步。"
-        actions={[{ label: '登出', danger: true, onClick: () => void signOut() }]}
+        actions={[{ label: '登出', danger: true, onClick: () => void signOutAndReload() }]}
         onClose={() => setConfirmSignOut(false)}
       />
     </section>

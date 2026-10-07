@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import AccountMenu from '../cloud/AccountMenu';
 import ChoiceSheet from '../components/ChoiceSheet';
 import PersonCard from '../components/PersonCard';
 import SyncDot from '../components/SyncDot';
@@ -107,6 +108,8 @@ export default function HomePage() {
             人脈記錄
             <SyncDot />
           </h1>
+          <div className="flex items-center">
+          <AccountMenu />
           <Link
             to="/settings"
             aria-label="設定"
@@ -122,6 +125,7 @@ export default function HomePage() {
               />
             </svg>
           </Link>
+          </div>
         </div>
         <div className="px-5 pb-3">
           <input

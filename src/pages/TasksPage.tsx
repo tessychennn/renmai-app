@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import AccountMenu from '../cloud/AccountMenu';
 import ConfirmSheet from '../components/ConfirmSheet';
 import SyncDot from '../components/SyncDot';
 import TabBar from '../components/TabBar';
@@ -148,6 +149,8 @@ export default function TasksPage() {
               待辦
               <SyncDot />
             </h1>
+            <div className="flex items-center">
+            <AccountMenu />
             <Link
               to="/tasks/settings"
               aria-label="待辦設定"
@@ -163,6 +166,7 @@ export default function TasksPage() {
                 />
               </svg>
             </Link>
+            </div>
           </div>
 
           <div role="tablist" aria-label="待辦檢視" className="mb-3 flex w-full rounded-full bg-ground p-1 md:w-fit">

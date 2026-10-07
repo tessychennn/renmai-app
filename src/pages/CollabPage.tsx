@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import AccountMenu from '../cloud/AccountMenu';
 import ChoiceSheet from '../components/ChoiceSheet';
 import NoteSheet from '../components/NoteSheet';
 import StatusChip from '../components/StatusChip';
@@ -79,11 +80,12 @@ export default function CollabPage() {
         className="glass fixed inset-x-0 top-0 z-10 border-b-[0.5px] border-hairline"
         style={{ paddingTop: 'env(safe-area-inset-top)' }}
       >
-        <div className="flex items-center px-5 pt-3 pb-2">
+        <div className="flex items-center justify-between px-5 pt-3 pb-2">
           <h1 className="flex items-center gap-2 text-2xl font-semibold">
             合作機會
             <SyncDot />
           </h1>
+          <AccountMenu />
         </div>
         <div className="flex gap-2 overflow-x-auto px-5 pb-2 [scrollbar-width:none]">
           <button
