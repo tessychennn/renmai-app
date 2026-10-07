@@ -9,12 +9,15 @@ export default function ConfirmSheet({
   title,
   message,
   actions,
+  cancelLabel = '取消',
   onClose,
 }: {
   open: boolean;
   title: string;
   message?: string;
   actions: SheetAction[];
+  /** 沒有可執行的動作、只是告知時，改成「知道了」之類 */
+  cancelLabel?: string;
   onClose: () => void;
 }) {
   if (!open) return null;
@@ -50,7 +53,7 @@ export default function ConfirmSheet({
             onClick={onClose}
             className="w-full rounded-xl bg-white px-4 py-3 font-medium text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
           >
-            取消
+            {cancelLabel}
           </button>
         </div>
       </div>

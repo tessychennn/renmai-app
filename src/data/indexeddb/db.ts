@@ -1,5 +1,5 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
-import type { Group, Person, Settings } from '../types';
+import type { Group, Person, Settings, Task, TaskOption } from '../types';
 
 export interface PhotoRecord {
   id: string;
@@ -12,10 +12,10 @@ export interface PhotoRecord {
   uploaded?: boolean;
 }
 
-/** 待上傳的變動：人物、分組、或被移除的照片（要通知雲端刪除） */
+/** 待上傳的變動：人物、分組、待辦、待辦選項，或被移除的照片（要通知雲端刪除） */
 export interface DirtyEntry {
   key: string;
-  kind: 'person' | 'group' | 'photo';
+  kind: 'person' | 'group' | 'photo' | 'task' | 'option';
   id: string;
 }
 
@@ -32,10 +32,12 @@ interface RenmaiDB extends DBSchema {
   settings: { key: string; value: Settings };
   syncMeta: { key: string; value: unknown };
   dirty: { key: string; value: DirtyEntry };
+  tasks: { key: string; value: Task };
+  taskOptions: { key: string; value: TaskOption };
 }
 
 export const DB_NAME = 'renmai';
-export const DB_VERSION = 2;
+export const DB_VERSION = 3;
 
 let dbPromise: Promise<IDBPDatabase<RenmaiDB>> | null = null;
 
@@ -62,6 +64,10 @@ export function getDB(): Promise<IDBPDatabase<RenmaiDB>> {
           }
           cursor = await cursor.continue();
         }
+      }
+      if (oldVersion < 3) {
+        db.createObjectStore('tasks', { keyPath: 'id' });
+        db.createObjectStore('taskOptions', { keyPath: 'id' });
       }
     },
   });

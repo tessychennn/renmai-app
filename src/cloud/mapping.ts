@@ -1,6 +1,14 @@
 // 本機資料 ↔ 雲端資料列的轉換。刻意不 import aws-amplify，方便單元測試。
 import type { Schema } from '../../amplify/data/resource';
-import type { CollabOwner, CollabStatus, Group, Person } from '../data/types';
+import type {
+  CollabOwner,
+  CollabStatus,
+  Group,
+  Person,
+  Task,
+  TaskOption,
+  TaskOptionKind,
+} from '../data/types';
 
 const STATUSES: readonly CollabStatus[] = ['contact', 'contacting', 'scheduled', 'done'];
 const OWNERS: readonly CollabOwner[] = ['Tessy', 'Serina'];
@@ -62,6 +70,74 @@ export function personToFields(p: Person) {
     clientCreatedAt: p.createdAt,
     clientUpdatedAt: p.updatedAt,
     deletedAt: p.deletedAt ?? null,
+  };
+}
+
+const OPTION_KINDS: readonly TaskOptionKind[] = ['category', 'member', 'priority', 'status'];
+
+export function rowToTask(row: Schema['Task']['type']): Task {
+  return {
+    id: row.id,
+    name: row.name,
+    categoryId: row.categoryId,
+    ownerId: row.ownerId ?? undefined,
+    dueDate: row.dueDate ?? undefined,
+    priorityId: row.priorityId ?? undefined,
+    statusId: row.statusId ?? undefined,
+    note: row.note ?? undefined,
+    createdBy: row.createdBy ?? undefined,
+    createdAt: row.clientCreatedAt,
+    updatedAt: row.clientUpdatedAt,
+    done: row.done,
+    doneAt: row.doneAt ?? undefined,
+    doneBy: row.doneBy ?? undefined,
+    deletedAt: row.deletedAt ?? undefined,
+  };
+}
+
+/** 欄位一律明確送出（沒有的送 null），清掉 Deadline、備註等才會真的清掉雲端的值 */
+export function taskToFields(t: Task) {
+  return {
+    name: t.name,
+    categoryId: t.categoryId,
+    ownerId: t.ownerId ?? null,
+    dueDate: t.dueDate ?? null,
+    priorityId: t.priorityId ?? null,
+    statusId: t.statusId ?? null,
+    note: t.note ?? null,
+    createdBy: t.createdBy ?? null,
+    done: t.done,
+    doneAt: t.doneAt ?? null,
+    doneBy: t.doneBy ?? null,
+    clientCreatedAt: t.createdAt,
+    clientUpdatedAt: t.updatedAt,
+    deletedAt: t.deletedAt ?? null,
+  };
+}
+
+/** 雲端出現不認得的種類就回傳 null，由呼叫端略過，避免髒資料讓畫面壞掉 */
+export function rowToOption(row: Schema['TaskOption']['type']): TaskOption | null {
+  const kind = OPTION_KINDS.find((k) => k === row.kind);
+  if (!kind) return null;
+  return {
+    id: row.id,
+    kind,
+    name: row.name,
+    order: row.order,
+    email: row.email ?? undefined,
+    updatedAt: row.clientUpdatedAt,
+    deletedAt: row.deletedAt ?? undefined,
+  };
+}
+
+export function optionToFields(o: TaskOption) {
+  return {
+    kind: o.kind,
+    name: o.name,
+    order: o.order,
+    email: o.email ?? null,
+    clientUpdatedAt: o.updatedAt,
+    deletedAt: o.deletedAt ?? null,
   };
 }
 

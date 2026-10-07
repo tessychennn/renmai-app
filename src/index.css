@@ -6,6 +6,9 @@
   --color-ink-2: #6e6e73;
   --color-danger: #b4372e;
   --color-hairline: rgba(0, 0, 0, 0.08);
+  /* 待辦的到期提醒：今天（較深）與快到期（較淺），低飽和的暖色 */
+  --color-warn-soft: #f0e2c4;
+  --color-soon: #f5ebd6;
 }
 
 html,

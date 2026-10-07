@@ -28,6 +28,20 @@ const TABS = [
       />
     ),
   },
+  {
+    to: '/tasks',
+    label: '待辦',
+    end: false,
+    icon: (
+      <path
+        d="m4 7 1.5 1.5L8 6M4 13l1.5 1.5L8 12M11 7.5h9M11 13.5h9M4 19h16"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    ),
+  },
 ];
 
 /** 下方分頁列：毛玻璃固定在底部，預留 home indicator 的安全區域 */

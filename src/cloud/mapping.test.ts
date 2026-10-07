@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { Schema } from '../../amplify/data/resource';
 import type { Person } from '../data/types';
-import { hasCollabData, personToFields, rowToPerson } from './mapping';
+import {
+  hasCollabData,
+  optionToFields,
+  personToFields,
+  rowToOption,
+  rowToPerson,
+  rowToTask,
+  taskToFields,
+} from './mapping';
 
 type PersonRow = Schema['Person']['type'];
 
@@ -71,5 +79,65 @@ describe('本機人物 → 雲端欄位', () => {
     expect(hasCollabData(base)).toBe(false);
     expect(hasCollabData({ ...base, collabStatus: 'done' })).toBe(true);
     expect(hasCollabData({ ...base, collabNote: 'x' })).toBe(true);
+  });
+});
+
+describe('待辦：雲端資料列 ↔ 本機', () => {
+  const taskRow = (overrides: Partial<Schema['Task']['type']> = {}) =>
+    ({
+      id: 'k1',
+      name: '寄報價單',
+      categoryId: 'c1',
+      done: false,
+      clientCreatedAt: '2026-10-01T00:00:00.000Z',
+      clientUpdatedAt: '2026-10-02T00:00:00.000Z',
+      createdAt: '2026-10-01T00:00:00.000Z',
+      updatedAt: '2026-10-02T00:00:00.000Z',
+      ...overrides,
+    }) as Schema['Task']['type'];
+
+  it('任務：欄位帶回、null 變成 undefined、時間戳用 client 時間', () => {
+    const t = rowToTask(
+      taskRow({ ownerId: 'm1', dueDate: '2026-10-15', note: null, doneAt: null, done: true, doneBy: 'Tessy' })
+    );
+    expect(t).toMatchObject({
+      id: 'k1',
+      ownerId: 'm1',
+      dueDate: '2026-10-15',
+      done: true,
+      doneBy: 'Tessy',
+      createdAt: '2026-10-01T00:00:00.000Z',
+      updatedAt: '2026-10-02T00:00:00.000Z',
+    });
+    expect(t.note).toBeUndefined();
+    expect(t.doneAt).toBeUndefined();
+  });
+
+  it('任務送出時沒有的欄位明確送 null，清掉 Deadline 才會真的清掉雲端的值', () => {
+    const f = taskToFields({
+      id: 'k1',
+      name: 'x',
+      categoryId: 'c1',
+      createdAt: 'a',
+      updatedAt: 'b',
+      done: false,
+    });
+    expect(f).toMatchObject({ ownerId: null, dueDate: null, note: null, doneAt: null, deletedAt: null });
+    expect(f.clientCreatedAt).toBe('a');
+    expect(f.clientUpdatedAt).toBe('b');
+  });
+
+  it('選項：正常帶回；種類不認得就略過（回傳 null），不讓髒資料進本機', () => {
+    const row = (kind: string) =>
+      ({ id: 'o1', kind, name: '高', order: 0, clientUpdatedAt: 'z' }) as Schema['TaskOption']['type'];
+    expect(rowToOption(row('priority'))).toMatchObject({ id: 'o1', kind: 'priority', name: '高', updatedAt: 'z' });
+    expect(rowToOption(row('weird'))).toBeNull();
+  });
+
+  it('選項送出：成員的 Email 沒填送 null', () => {
+    expect(optionToFields({ id: 'o', kind: 'member', name: 'Tessy', order: 0, updatedAt: 'z' }).email).toBeNull();
+    expect(
+      optionToFields({ id: 'o', kind: 'member', name: 'Tessy', order: 0, email: 'a@b.c', updatedAt: 'z' }).email
+    ).toBe('a@b.c');
   });
 });

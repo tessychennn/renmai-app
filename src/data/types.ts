@@ -31,6 +31,57 @@ export interface Group {
   deletedAt?: string;
 }
 
+/** 待辦的選項清單：分類、成員、優先級、狀態。任務用編號引用，改名不需要同步舊任務。 */
+export type TaskOptionKind = 'category' | 'member' | 'priority' | 'status';
+
+export interface TaskOption {
+  id: string;
+  kind: TaskOptionKind;
+  name: string;
+  order: number;
+  /** 成員專用：登入信箱，用來判斷「是誰操作」 */
+  email?: string;
+  updatedAt: string;
+  deletedAt?: string;
+}
+
+export interface Task {
+  id: string;
+  name: string;
+  categoryId: string;
+  ownerId?: string;
+  /** YYYY-MM-DD */
+  dueDate?: string;
+  priorityId?: string;
+  statusId?: string;
+  note?: string;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+  done: boolean;
+  /** YYYY-MM-DD */
+  doneAt?: string;
+  doneBy?: string;
+  deletedAt?: string;
+}
+
+export interface TaskRepo {
+  /** 未刪除的任務（含已完成） */
+  list(): Promise<Task[]>;
+  get(id: string): Promise<Task | null>;
+  save(task: Task): Promise<void>;
+  saveMany(tasks: Task[]): Promise<void>;
+  remove(id: string): Promise<void>;
+}
+
+export interface TaskOptionRepo {
+  /** 未刪除的選項，依 order 排序；不帶 kind 就是全部 */
+  list(kind?: TaskOptionKind): Promise<TaskOption[]>;
+  save(option: TaskOption): Promise<void>;
+  saveMany(options: TaskOption[]): Promise<void>;
+  remove(id: string): Promise<void>;
+}
+
 export interface Settings {
   currentOccasion?: string;
   lastExportAt?: string;

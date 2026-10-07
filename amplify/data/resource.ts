@@ -33,6 +33,39 @@ const schema = a.schema({
       deletedAt: a.string(),
     })
     .authorization((allow) => [allow.authenticated()]),
+
+  // 待辦：任務用編號引用選項（分類、負責人、優先級、狀態），改名不用動任務。
+  // 所有登入的人都能新增、修改、完成、刪除任務。
+  Task: a
+    .model({
+      name: a.string().required(),
+      categoryId: a.string().required(),
+      ownerId: a.string(),
+      dueDate: a.string(),
+      priorityId: a.string(),
+      statusId: a.string(),
+      note: a.string(),
+      createdBy: a.string(),
+      done: a.boolean().required(),
+      doneAt: a.string(),
+      doneBy: a.string(),
+      clientCreatedAt: a.string().required(),
+      clientUpdatedAt: a.string().required(),
+      deletedAt: a.string(),
+    })
+    .authorization((allow) => [allow.authenticated()]),
+
+  // 待辦的選項清單：所有人可讀，只有 admin 群組能寫（伺服器強制執行）。
+  TaskOption: a
+    .model({
+      kind: a.string().required(),
+      name: a.string().required(),
+      order: a.integer().required(),
+      email: a.string(),
+      clientUpdatedAt: a.string().required(),
+      deletedAt: a.string(),
+    })
+    .authorization((allow) => [allow.group('admin'), allow.authenticated().to(['read'])]),
 });
 
 export type Schema = ClientSchema<typeof schema>;

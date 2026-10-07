@@ -3,6 +3,7 @@
 import { Amplify } from 'aws-amplify';
 import {
   confirmSignIn,
+  fetchAuthSession,
   fetchUserAttributes,
   getCurrentUser,
   signIn,
@@ -11,11 +12,21 @@ import {
 import { generateClient } from 'aws-amplify/data';
 import { downloadData, remove, uploadData } from 'aws-amplify/storage';
 import type { Schema } from '../../amplify/data/resource';
-import type { Group, Person } from '../data/types';
+import type { Group, Person, Task, TaskOption } from '../data/types';
 import { AuthRequiredError } from '../sync/errors';
 import type { RemoteStore } from '../sync/types';
 import { amplifyOutputs } from './config';
-import { groupToFields, hasCollabData, personToFields, rowToGroup, rowToPerson } from './mapping';
+import {
+  groupToFields,
+  hasCollabData,
+  optionToFields,
+  personToFields,
+  rowToGroup,
+  rowToOption,
+  rowToPerson,
+  rowToTask,
+  taskToFields,
+} from './mapping';
 
 let configured = false;
 
@@ -129,13 +140,44 @@ function mapError(e: unknown): unknown {
  * 後端還沒更新或 outputs 還是舊的時，Amplify 用舊描述組查詢，新欄位會被默默丟掉；
  * 如果這時照常上傳，本機會以為已經同步成功，合作狀態就永遠到不了雲端。
  */
-function backendSupportsCollab(): boolean {
-  const models = (
+function introspectedModels() {
+  return (
     amplifyOutputs as
       | { data?: { model_introspection?: { models?: Record<string, { fields?: Record<string, unknown> }> } } }
       | undefined
   )?.data?.model_introspection?.models;
-  return Boolean(models?.Person?.fields?.collabStatus);
+}
+
+function backendSupportsCollab(): boolean {
+  return Boolean(introspectedModels()?.Person?.fields?.collabStatus);
+}
+
+/** 後端是否已有待辦的資料表（同樣看 amplify_outputs.json） */
+function backendSupportsTasks(): boolean {
+  const models = introspectedModels();
+  return Boolean(models?.Task && models?.TaskOption);
+}
+
+const TASKS_NOT_DEPLOYED =
+  `這支手機上的 App（版本 ${__APP_VERSION__}）用的連線設定還不含「待辦」資料表。` +
+  '如果已經換過 amplify_outputs.json 並 push，請等部署完成後，把 App 完全關掉再開；' +
+  '還沒換的話請先下載新檔。手機上的資料都還在，更新後會自動同步。';
+
+/**
+ * 目前登入者所屬的 Cognito 群組（例如 admin）。
+ * 沒有群組回傳空陣列；讀不到（沒登入、網路問題）回傳 null，呼叫端據此沿用上次已知的身分，
+ * 不會因為離線就把管理員當成一般成員。
+ */
+export async function currentGroups(): Promise<string[] | null> {
+  configureCloud();
+  try {
+    const { tokens } = await fetchAuthSession();
+    if (!tokens?.idToken) return null;
+    const groups = tokens.idToken.payload['cognito:groups'];
+    return Array.isArray(groups) ? groups.map(String) : [];
+  } catch {
+    return null;
+  }
 }
 
 const photoPath = (id: string, variant: 'full' | 'thumb') => `photos/${id}/${variant}.jpg`;
@@ -218,6 +260,77 @@ export function createRemoteStore(): RemoteStore {
           : await client.models.Group.create({ id: g.id, ...fields });
         assertOk(res.errors);
       } catch (e) {
+        throw mapError(e);
+      }
+    },
+
+    async listTasks() {
+      if (!backendSupportsTasks()) return []; // 後端還沒有這張表：先當作沒資料，不要拖垮人物的同步
+      const out: Task[] = [];
+      let nextToken: string | null | undefined;
+      try {
+        do {
+          const res = await client.models.Task.list({ limit: 500, nextToken });
+          assertOk(res.errors);
+          out.push(...res.data.map(rowToTask));
+          nextToken = res.nextToken;
+        } while (nextToken);
+      } catch (e) {
+        throw mapError(e);
+      }
+      return out;
+    },
+
+    async listOptions() {
+      if (!backendSupportsTasks()) return [];
+      const out: TaskOption[] = [];
+      let nextToken: string | null | undefined;
+      try {
+        do {
+          const res = await client.models.TaskOption.list({ limit: 500, nextToken });
+          assertOk(res.errors);
+          for (const row of res.data) {
+            const option = rowToOption(row);
+            if (option) out.push(option);
+          }
+          nextToken = res.nextToken;
+        } while (nextToken);
+      } catch (e) {
+        throw mapError(e);
+      }
+      return out;
+    },
+
+    async putTask(t) {
+      if (!backendSupportsTasks()) throw new Error(TASKS_NOT_DEPLOYED);
+      const fields = taskToFields(t);
+      try {
+        const existing = await client.models.Task.get({ id: t.id });
+        assertOk(existing.errors);
+        const res = existing.data
+          ? await client.models.Task.update({ id: t.id, ...fields })
+          : await client.models.Task.create({ id: t.id, ...fields });
+        assertOk(res.errors);
+      } catch (e) {
+        throw mapError(e);
+      }
+    },
+
+    async putOption(o) {
+      if (!backendSupportsTasks()) throw new Error(TASKS_NOT_DEPLOYED);
+      const fields = optionToFields(o);
+      try {
+        const existing = await client.models.TaskOption.get({ id: o.id });
+        assertOk(existing.errors);
+        const res = existing.data
+          ? await client.models.TaskOption.update({ id: o.id, ...fields })
+          : await client.models.TaskOption.create({ id: o.id, ...fields });
+        assertOk(res.errors);
+      } catch (e) {
+        // 非管理員寫入選項會被伺服器拒絕：給一句人看得懂的話
+        if (/unauthorized|not authorized/i.test(String((e as Error)?.message))) {
+          throw new Error('只有管理員可以修改待辦的設定（分類、成員、優先級、狀態）。');
+        }
         throw mapError(e);
       }
     },

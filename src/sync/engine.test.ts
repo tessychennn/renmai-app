@@ -7,8 +7,11 @@ import { IndexedDBGroupRepo } from '../data/indexeddb/groupRepo';
 import { IndexedDBPersonRepo } from '../data/indexeddb/personRepo';
 import { IndexedDBPhotoRepo, setPhotoTransport } from '../data/indexeddb/photoRepo';
 import { ensureDefaultGroups } from '../data/indexeddb/seedGroups';
+import { ensureDefaultTaskOptions } from '../data/indexeddb/seedTaskOptions';
 import { IndexedDBSyncLocal } from '../data/indexeddb/syncLocal';
-import type { Group, Person } from '../data/types';
+import { IndexedDBTaskOptionRepo } from '../data/indexeddb/taskOptionRepo';
+import { IndexedDBTaskRepo } from '../data/indexeddb/taskRepo';
+import type { Group, Person, Task, TaskOption } from '../data/types';
 import { runSync } from './engine';
 import type { RemoteStore } from './types';
 
@@ -33,6 +36,10 @@ URL.revokeObjectURL = () => undefined;
 class FakeRemote implements RemoteStore {
   persons = new Map<string, Person>();
   groups = new Map<string, Group>();
+  tasks = new Map<string, Task>();
+  options = new Map<string, TaskOption>();
+  /** 模擬「只有管理員能寫入選項」：true 時 putOption 會被拒絕 */
+  rejectOptionWrites = false;
   photos = new Map<string, { full: Blob; thumb: Blob }>();
   downloads: string[] = [];
   failPuts = false;
@@ -45,6 +52,23 @@ class FakeRemote implements RemoteStore {
   async listGroups() {
     if (this.failList) throw new TypeError('Failed to fetch');
     return [...this.groups.values()].map((g) => structuredClone(g));
+  }
+  async listTasks() {
+    if (this.failList) throw new TypeError('Failed to fetch');
+    return [...this.tasks.values()].map((t) => structuredClone(t));
+  }
+  async listOptions() {
+    if (this.failList) throw new TypeError('Failed to fetch');
+    return [...this.options.values()].map((o) => structuredClone(o));
+  }
+  async putTask(t: Task) {
+    if (this.failPuts) throw new Error('network down');
+    this.tasks.set(t.id, structuredClone(t));
+  }
+  async putOption(o: TaskOption) {
+    if (this.rejectOptionWrites) throw new Error('只有管理員可以修改待辦的設定');
+    if (this.failPuts) throw new Error('network down');
+    this.options.set(o.id, structuredClone(o));
   }
   async putPerson(p: Person) {
     if (this.failPuts) throw new Error('network down');
@@ -70,6 +94,8 @@ class FakeRemote implements RemoteStore {
 const personRepo = new IndexedDBPersonRepo();
 const groupRepo = new IndexedDBGroupRepo();
 const photoRepo = new IndexedDBPhotoRepo();
+const taskRepo = new IndexedDBTaskRepo();
+const taskOptionRepo = new IndexedDBTaskOptionRepo();
 const local = new IndexedDBSyncLocal();
 
 let remote: FakeRemote;
@@ -90,6 +116,18 @@ function person(overrides: Partial<Person> = {}): Person {
     groupIds: [],
     createdAt: '2026-09-01T00:00:00.000Z',
     updatedAt: '2026-09-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function task(overrides: Partial<Task> = {}): Task {
+  return {
+    id: 'k',
+    name: '任務',
+    categoryId: 'opt-category-c0',
+    createdAt: '2026-09-01T00:00:00.000Z',
+    updatedAt: '2026-09-01T00:00:00.000Z',
+    done: false,
     ...overrides,
   };
 }
@@ -322,6 +360,112 @@ describe('雲端同步', () => {
 
     expect((await groupRepo.list()).map((g) => g.name)).not.toContain('食品相關');
     expect((await groupRepo.list()).length).toBe(4);
+  });
+
+  it('A 新增待辦，B 同步後看得到；B 打勾完成，A 同步後也是完成', async () => {
+    await useDevice('A');
+    await taskRepo.save(task({ id: 'k1', name: '寄報價單', categoryId: 'opt-category-c0' }));
+    await syncNow();
+    expect(remote.tasks.get('k1')?.name).toBe('寄報價單');
+
+    await useDevice('B');
+    await syncNow();
+    expect((await taskRepo.get('k1'))?.name).toBe('寄報價單');
+
+    await taskRepo.save(
+      task({
+        id: 'k1',
+        name: '寄報價單',
+        categoryId: 'opt-category-c0',
+        done: true,
+        doneAt: '2026-10-07',
+        doneBy: 'Serina',
+        updatedAt: '2026-09-12T00:00:00.000Z',
+      })
+    );
+    await syncNow();
+    await useDevice('A');
+    await syncNow();
+    expect(await taskRepo.get('k1')).toMatchObject({ done: true, doneBy: 'Serina' });
+  });
+
+  it('刪除待辦：另一支手機也消失，雲端墓碑不留名稱與備註', async () => {
+    await useDevice('A');
+    await taskRepo.save(task({ id: 'k1', name: '機密專案', note: '不要外流' }));
+    await syncNow();
+    await useDevice('B');
+    await syncNow();
+    expect(await taskRepo.get('k1')).not.toBeNull();
+
+    vi.setSystemTime(new Date('2026-09-13T00:00:00.000Z'));
+    await useDevice('A');
+    await taskRepo.remove('k1');
+    await syncNow();
+    expect(remote.tasks.get('k1')).toMatchObject({ name: '', deletedAt: expect.any(String) });
+    expect(remote.tasks.get('k1')?.note).toBeUndefined();
+
+    await useDevice('B');
+    await syncNow();
+    expect(await taskRepo.get('k1')).toBeNull();
+  });
+
+  it('預設選項只存在本機：一般成員同步不會試圖上傳它們，也不會出錯', async () => {
+    remote.rejectOptionWrites = true; // 模擬非管理員：伺服器會拒絕寫入選項
+    await useDevice('B');
+    await ensureDefaultTaskOptions();
+    const result = await syncNow();
+    expect(result.errors).toEqual([]);
+    expect(remote.options.size).toBe(0);
+    expect((await taskOptionRepo.list()).length).toBe(15);
+  });
+
+  it('管理員改選項名稱會同步，另一支手機（原本是預設值）看到新名稱', async () => {
+    await useDevice('A'); // 管理員
+    await ensureDefaultTaskOptions();
+    const [first] = await taskOptionRepo.list('category');
+    await taskOptionRepo.save({ ...first, name: '客戶開發', updatedAt: '2026-09-12T00:00:00.000Z' });
+    await syncNow();
+    expect(remote.options.size).toBe(1); // 只上傳被改過的那一個
+
+    await useDevice('B'); // 一般成員，本機是預設值
+    await ensureDefaultTaskOptions();
+    await syncNow();
+    expect((await taskOptionRepo.list('category'))[0].name).toBe('客戶開發');
+    expect((await taskOptionRepo.list('category')).length).toBe(6);
+  });
+
+  it('管理員刪掉預設選項：新手機啟動補建預設值後同步，不會把它救回來', async () => {
+    await useDevice('A');
+    await ensureDefaultTaskOptions();
+    vi.setSystemTime(new Date('2026-09-14T00:00:00.000Z'));
+    await taskOptionRepo.remove('opt-category-c1');
+    await syncNow();
+
+    await useDevice('B'); // 全新手機
+    await ensureDefaultTaskOptions();
+    await syncNow();
+    expect((await taskOptionRepo.list('category')).map((o) => o.name)).not.toContain('行銷');
+  });
+
+  it('非管理員被拒絕寫入選項時：變動留在待上傳並回報錯誤，其他資料照常同步', async () => {
+    await useDevice('B');
+    await ensureDefaultTaskOptions();
+    await taskOptionRepo.save({
+      id: 'x',
+      kind: 'category',
+      name: '偷偷新增',
+      order: 9,
+      updatedAt: '2026-09-12T00:00:00.000Z',
+    });
+    await personRepo.save(person({ id: 'p9' }));
+    remote.rejectOptionWrites = true;
+
+    const result = await syncNow();
+
+    expect(result.errors.length).toBe(1);
+    expect(result.errors[0]).toContain('option:x');
+    expect(remote.persons.has('p9')).toBe(true);
+    expect((await local.listDirty()).map((d) => d.key)).toContain('option:x');
   });
 
   it('上傳失敗時保留待上傳標記，下次同步重試成功', async () => {

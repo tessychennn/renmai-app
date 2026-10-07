@@ -5,6 +5,8 @@ import PersonDetailPage from './pages/PersonDetailPage';
 import SettingsPage from './pages/SettingsPage';
 import PrivacyPage from './pages/PrivacyPage';
 import CollabPage from './pages/CollabPage';
+import TasksPage from './pages/TasksPage';
+import TaskSettingsPage from './pages/TaskSettingsPage';
 import AuthGate from './cloud/AuthGate';
 
 export default function App() {
@@ -14,6 +16,8 @@ export default function App() {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/collab" element={<CollabPage />} />
+          <Route path="/tasks" element={<TasksPage />} />
+          <Route path="/tasks/settings" element={<TaskSettingsPage />} />
           <Route path="/new" element={<PersonFormPage />} />
           <Route path="/person/:id" element={<PersonDetailPage />} />
           <Route path="/person/:id/edit" element={<PersonFormPage />} />

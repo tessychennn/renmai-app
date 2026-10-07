@@ -163,8 +163,14 @@ export default function SettingsPage() {
 
         <section className={cardClass}>
           <Link
-            to="/privacy"
+            to="/tasks/settings"
             className="block py-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink"
+          >
+            待辦設定（分類、成員、優先級、狀態）
+          </Link>
+          <Link
+            to="/privacy"
+            className="mt-3 block py-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink"
           >
             隱私權政策
           </Link>

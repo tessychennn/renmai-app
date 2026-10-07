@@ -1,8 +1,17 @@
+import { OPTION_SEED_TIME } from '../defaultTaskOptions';
 import { dirtyKey, getDB, savePhotoVariant } from './db';
-import type { Group, Person } from '../types';
-import type { DirtyEntry, SyncLocal } from '../../sync/types';
+import type { Group, Person, Task, TaskOption } from '../types';
+import type { DirtyEntry, EntityKind, SyncLocal } from '../../sync/types';
 
 const INITIALIZED_KEY = 'cloudInitialized';
+
+/** 單筆資料種類 → 對應的 object store */
+const STORE_OF = {
+  person: 'persons',
+  group: 'groups',
+  task: 'tasks',
+  option: 'taskOptions',
+} as const;
 
 export class IndexedDBSyncLocal implements SyncLocal {
   async isInitialized(): Promise<boolean> {
@@ -12,13 +21,25 @@ export class IndexedDBSyncLocal implements SyncLocal {
 
   async initialize(): Promise<void> {
     const db = await getDB();
-    const tx = db.transaction(['persons', 'groups', 'dirty', 'syncMeta'], 'readwrite');
+    const tx = db.transaction(
+      ['persons', 'groups', 'tasks', 'taskOptions', 'dirty', 'syncMeta'],
+      'readwrite'
+    );
     const dirty = tx.objectStore('dirty');
     for (const p of await tx.objectStore('persons').getAll()) {
       await dirty.put({ key: dirtyKey('person', p.id), kind: 'person', id: p.id });
     }
     for (const g of await tx.objectStore('groups').getAll()) {
       await dirty.put({ key: dirtyKey('group', g.id), kind: 'group', id: g.id });
+    }
+    for (const t of await tx.objectStore('tasks').getAll()) {
+      await dirty.put({ key: dirtyKey('task', t.id), kind: 'task', id: t.id });
+    }
+    for (const o of await tx.objectStore('taskOptions').getAll()) {
+      // 沒被改過的預設選項不上傳（見 defaultTaskOptions.ts）
+      if (o.updatedAt !== OPTION_SEED_TIME) {
+        await dirty.put({ key: dirtyKey('option', o.id), kind: 'option', id: o.id });
+      }
     }
     await tx.objectStore('syncMeta').put(true, INITIALIZED_KEY);
     await tx.done;
@@ -32,6 +53,14 @@ export class IndexedDBSyncLocal implements SyncLocal {
     return (await getDB()).getAll('groups');
   }
 
+  async listTasks(): Promise<Task[]> {
+    return (await getDB()).getAll('tasks');
+  }
+
+  async listOptions(): Promise<TaskOption[]> {
+    return (await getDB()).getAll('taskOptions');
+  }
+
   async getPerson(id: string): Promise<Person | undefined> {
     return (await getDB()).get('persons', id);
   }
@@ -40,35 +69,54 @@ export class IndexedDBSyncLocal implements SyncLocal {
     return (await getDB()).get('groups', id);
   }
 
-  async applyPerson(person: Person): Promise<boolean> {
+  async getTask(id: string): Promise<Task | undefined> {
+    return (await getDB()).get('tasks', id);
+  }
+
+  async getOption(id: string): Promise<TaskOption | undefined> {
+    return (await getDB()).get('taskOptions', id);
+  }
+
+  /** 寫入雲端版本：只有比本機新才寫，並清掉該筆的待上傳標記 */
+  private async applyEntity(
+    kind: EntityKind,
+    item: { id: string; updatedAt: string }
+  ): Promise<boolean> {
+    const store = STORE_OF[kind];
     const db = await getDB();
-    const tx = db.transaction(['persons', 'dirty'], 'readwrite');
-    const current = await tx.objectStore('persons').get(person.id);
-    if (current && current.updatedAt >= person.updatedAt) {
+    const tx = db.transaction([store, 'dirty'], 'readwrite');
+    const entities = tx.objectStore(store) as unknown as {
+      get(id: string): Promise<{ updatedAt: string } | undefined>;
+      put(value: unknown): Promise<unknown>;
+    };
+    const current = await entities.get(item.id);
+    if (current && current.updatedAt >= item.updatedAt) {
       await tx.done;
       return false;
     }
-    await tx.objectStore('persons').put(person);
-    await tx.objectStore('dirty').delete(dirtyKey('person', person.id));
+    await entities.put(item);
+    await tx.objectStore('dirty').delete(dirtyKey(kind, item.id));
     await tx.done;
     return true;
   }
 
-  async applyGroup(group: Group): Promise<boolean> {
-    const db = await getDB();
-    const tx = db.transaction(['groups', 'dirty'], 'readwrite');
-    const current = await tx.objectStore('groups').get(group.id);
-    if (current && current.updatedAt >= group.updatedAt) {
-      await tx.done;
-      return false;
-    }
-    await tx.objectStore('groups').put(group);
-    await tx.objectStore('dirty').delete(dirtyKey('group', group.id));
-    await tx.done;
-    return true;
+  applyPerson(person: Person): Promise<boolean> {
+    return this.applyEntity('person', person);
   }
 
-  async markDirty(kind: 'person' | 'group', id: string): Promise<void> {
+  applyGroup(group: Group): Promise<boolean> {
+    return this.applyEntity('group', group);
+  }
+
+  applyTask(task: Task): Promise<boolean> {
+    return this.applyEntity('task', task);
+  }
+
+  applyOption(option: TaskOption): Promise<boolean> {
+    return this.applyEntity('option', option);
+  }
+
+  async markDirty(kind: EntityKind, id: string): Promise<void> {
     const db = await getDB();
     await db.put('dirty', { key: dirtyKey(kind, id), kind, id });
   }
@@ -79,18 +127,19 @@ export class IndexedDBSyncLocal implements SyncLocal {
 
   async clearDirty(key: string, ifUpdatedAt?: string): Promise<void> {
     const db = await getDB();
-    const tx = db.transaction(['dirty', 'persons', 'groups'], 'readwrite');
+    const tx = db.transaction(['dirty', 'persons', 'groups', 'tasks', 'taskOptions'], 'readwrite');
     if (ifUpdatedAt) {
       const entry = await tx.objectStore('dirty').get(key);
-      const current =
-        entry?.kind === 'person'
-          ? await tx.objectStore('persons').get(entry.id)
-          : entry?.kind === 'group'
-            ? await tx.objectStore('groups').get(entry.id)
-            : undefined;
-      if (current && current.updatedAt !== ifUpdatedAt) {
-        await tx.done;
-        return;
+      if (entry && entry.kind !== 'photo') {
+        const current = (await (
+          tx.objectStore(STORE_OF[entry.kind]) as unknown as {
+            get(id: string): Promise<{ updatedAt: string } | undefined>;
+          }
+        ).get(entry.id)) as { updatedAt: string } | undefined;
+        if (current && current.updatedAt !== ifUpdatedAt) {
+          await tx.done;
+          return;
+        }
       }
     }
     await tx.objectStore('dirty').delete(key);
