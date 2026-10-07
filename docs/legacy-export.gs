@@ -4,6 +4,25 @@
  * 只讀取，不會改動試算表。
  */
 function exportJson() {
+  const json = buildExportJson_();
+  SpreadsheetApp.getUi().showModalDialog(
+    HtmlService.createHtmlOutput('<textarea style="width:100%;height:320px">' + json + '</textarea>')
+      .setWidth(560).setHeight(380),
+    '複製全部內容，貼到 App 的「待辦設定 → 匯入」');
+}
+
+/**
+ * 備用做法：資料很多、複製貼上被截斷時，改存成 Google 雲端硬碟的檔案，
+ * 下載後在 App 的「待辦設定 → 匯入 → 選擇檔案」選它。第一次執行會要求授權雲端硬碟。
+ */
+function exportJsonToDrive() {
+  const file = DriveApp.createFile('renmai-todo-export.json', buildExportJson_(), MimeType.PLAIN_TEXT);
+  const html = '<p>已存到你的雲端硬碟：</p><p><a href="' + file.getUrl() + '" target="_blank">' +
+    file.getName() + '</a></p><p>下載這個檔案，到 App 的「待辦設定 → 匯入 → 選擇檔案」。</p>';
+  SpreadsheetApp.getUi().showModalDialog(HtmlService.createHtmlOutput(html).setWidth(420).setHeight(200), '匯出完成');
+}
+
+function buildExportJson_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const data = ss.getSheetByName('_資料');
   const n = Math.max(data.getLastRow() - 1, 0);
@@ -21,9 +40,6 @@ function exportJson() {
   const out = {
     categories: col(1), members: col(3), priorities: col(6), statuses: col(8), tasks: tasks
   };
-  const json = JSON.stringify(out).replace(/</g, '\\u003c');
-  SpreadsheetApp.getUi().showModalDialog(
-    HtmlService.createHtmlOutput('<textarea style="width:100%;height:320px">' + json + '</textarea>')
-      .setWidth(560).setHeight(380),
-    '複製全部內容，貼到 App 的「待辦設定 → 匯入」');
+  // < 改成 <：貼進網頁的文字框時才不會被當成 HTML 標籤；JSON 解析時會還原成 <
+  return JSON.stringify(out).replace(/</g, '\\u003c');
 }

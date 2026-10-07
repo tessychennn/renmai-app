@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import AccountMenu from '../cloud/AccountMenu';
 import ChoiceSheet from '../components/ChoiceSheet';
+import HeaderActions from '../components/HeaderActions';
 import PersonCard from '../components/PersonCard';
 import SyncDot from '../components/SyncDot';
 import TabBar from '../components/TabBar';
@@ -108,24 +108,7 @@ export default function HomePage() {
             人脈記錄
             <SyncDot />
           </h1>
-          <div className="flex items-center">
-          <AccountMenu />
-          <Link
-            to="/settings"
-            aria-label="設定"
-            className="flex h-9 w-9 items-center justify-center rounded-full text-ink-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink"
-          >
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-              <circle cx="10" cy="10" r="3" stroke="currentColor" strokeWidth="1.5" />
-              <path
-                d="M10 2v2.2M10 15.8V18M18 10h-2.2M4.2 10H2M15.7 4.3l-1.6 1.6M5.9 14.1l-1.6 1.6M15.7 15.7l-1.6-1.6M5.9 5.9 4.3 4.3"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-              />
-            </svg>
-          </Link>
-          </div>
+          <HeaderActions />
         </div>
         <div className="px-5 pb-3">
           <input

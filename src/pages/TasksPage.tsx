@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import AccountMenu from '../cloud/AccountMenu';
 import ConfirmSheet from '../components/ConfirmSheet';
+import HeaderActions from '../components/HeaderActions';
 import SyncDot from '../components/SyncDot';
 import TabBar from '../components/TabBar';
 import CalendarView from '../components/tasks/CalendarView';
@@ -149,24 +148,7 @@ export default function TasksPage() {
               待辦
               <SyncDot />
             </h1>
-            <div className="flex items-center">
-            <AccountMenu />
-            <Link
-              to="/tasks/settings"
-              aria-label="待辦設定"
-              className="flex h-9 w-9 items-center justify-center rounded-full text-ink-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink"
-            >
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                <circle cx="10" cy="10" r="3" stroke="currentColor" strokeWidth="1.5" />
-                <path
-                  d="M10 2v2.2M10 15.8V18M18 10h-2.2M4.2 10H2M15.7 4.3l-1.6 1.6M5.9 14.1l-1.6 1.6M15.7 15.7l-1.6-1.6M5.9 5.9 4.3 4.3"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                />
-              </svg>
-            </Link>
-            </div>
+            <HeaderActions taskSettings />
           </div>
 
           <div role="tablist" aria-label="待辦檢視" className="mb-3 flex w-full rounded-full bg-ground p-1 md:w-fit">

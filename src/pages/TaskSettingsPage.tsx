@@ -7,6 +7,7 @@ import type { TaskOption, TaskOptionKind } from '../data/types';
 import { useRole } from '../hooks/useRole';
 import { useTaskData } from '../hooks/useTaskData';
 import { planLegacyImport } from '../lib/legacyImport';
+import { parseLegacyJson } from '../lib/parseLegacyJson';
 import { optionUsage } from '../lib/tasks';
 
 const SECTIONS: { kind: TaskOptionKind; title: string; hint: string }[] = [
@@ -92,12 +93,7 @@ export default function TaskSettingsPage() {
     setImporting(true);
     setImportMessage('');
     try {
-      let raw: unknown;
-      try {
-        raw = JSON.parse(importText);
-      } catch {
-        throw new Error('貼上的內容不是有效的 JSON，請整段複製。');
-      }
+      const raw = parseLegacyJson(importText);
       const existingIds = new Set((await taskRepo.list()).map((t) => t.id));
       const plan = planLegacyImport(raw, allOptions, existingIds);
       await taskOptionRepo.saveMany(plan.newOptions);
@@ -202,7 +198,7 @@ export default function TaskSettingsPage() {
           <section className={`${cardClass} p-4`} aria-label="匯入舊資料">
             <h2 className="font-semibold">匯入原本試算表的資料</h2>
             <p className="mt-0.5 text-sm text-ink-2">
-              貼上試算表匯出的內容。可以重複匯入，已經匯入過的項目不會重複建立，也不會蓋掉你之後的修改。
+              貼上試算表匯出的內容，或選擇匯出的檔案。可以重複匯入，已經匯入過的項目不會重複建立，也不會蓋掉你之後的修改。
             </p>
             <textarea
               value={importText}
@@ -211,14 +207,34 @@ export default function TaskSettingsPage() {
               placeholder='{"categories": [...], "tasks": [...]}'
               className="mt-3 w-full rounded-xl border-[0.5px] border-hairline bg-ground px-3 py-2.5 font-mono text-ink placeholder:text-ink-2 focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink"
             />
-            <button
-              type="button"
-              onClick={() => void doImport()}
-              disabled={importing || !importText.trim()}
-              className="mt-3 rounded-xl bg-ink px-4 py-2.5 font-medium text-white disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
-            >
-              {importing ? '匯入中⋯' : '匯入'}
-            </button>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void doImport()}
+                disabled={importing || !importText.trim()}
+                className="rounded-xl bg-ink px-4 py-2.5 font-medium text-white disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+              >
+                {importing ? '匯入中⋯' : '匯入'}
+              </button>
+              {/* 內容很長時，貼上可能被截斷；選擇檔案可以繞過剪貼簿 */}
+              <label className="cursor-pointer rounded-xl border-[0.5px] border-hairline bg-white px-4 py-2.5 font-medium focus-within:outline focus-within:outline-2 focus-within:outline-ink">
+                選擇檔案
+                <input
+                  type="file"
+                  accept=".json,.txt,application/json,text/plain"
+                  className="sr-only"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    e.target.value = '';
+                    if (!file) return;
+                    void file.text().then((text) => {
+                      setImportText(text);
+                      setImportMessage(`已讀入「${file.name}」（${text.length} 字），按「匯入」開始。`);
+                    });
+                  }}
+                />
+              </label>
+            </div>
             {importMessage && (
               <p role="status" className="mt-3 text-sm text-ink-2">
                 {importMessage}

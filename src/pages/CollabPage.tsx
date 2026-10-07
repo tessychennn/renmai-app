@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import AccountMenu from '../cloud/AccountMenu';
 import ChoiceSheet from '../components/ChoiceSheet';
+import HeaderActions from '../components/HeaderActions';
 import NoteSheet from '../components/NoteSheet';
 import StatusChip from '../components/StatusChip';
 import SyncDot from '../components/SyncDot';
@@ -85,7 +85,7 @@ export default function CollabPage() {
             合作機會
             <SyncDot />
           </h1>
-          <AccountMenu />
+          <HeaderActions />
         </div>
         <div className="flex gap-2 overflow-x-auto px-5 pb-2 [scrollbar-width:none]">
           <button
