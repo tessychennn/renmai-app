@@ -185,15 +185,14 @@ export default function HomePage() {
           paddingBottom: 'calc(env(safe-area-inset-bottom) + 144px)',
         }}
       >
-        {backupStale && persons !== null && persons.length > 0 && (
+        {/* 開了雲端同步，資料本來就在雲端，不需要催備份 */}
+        {!cloudEnabled && backupStale && persons !== null && persons.length > 0 && (
           <Link
             to="/settings"
             className="mb-3 block rounded-xl border-[0.5px] border-hairline bg-white px-4 py-3 text-sm shadow-[0_1px_3px_rgba(0,0,0,0.06)]"
           >
             <span className="font-medium text-danger">超過 14 天未備份。</span>
-            <span className="text-ink-2">{cloudEnabled
-                ? '資料已同步到雲端，仍建議到設定頁匯出一份備份。'
-                : '到設定頁匯出一份，資料只存在這支手機上。'}</span>
+            <span className="text-ink-2">到設定頁匯出一份，資料只存在這支手機上。</span>
           </Link>
         )}
 
