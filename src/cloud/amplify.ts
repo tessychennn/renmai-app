@@ -367,7 +367,7 @@ export function createRemoteStore(): RemoteStore {
           const creds = session?.credentials ? '有' : '沒有';
           throw new Error(
             `雲端拒絕讀取照片（${name}${status ? ` ${status}` : ''}；登入憑證：${creds}；` +
-              `${((e as Error)?.message ?? '').slice(0, 80)}）`
+              `${((e as Error)?.message ?? '').slice(0, 220)}）`
           );
         }
         throw mapError(e);
