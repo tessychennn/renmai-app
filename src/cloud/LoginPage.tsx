@@ -58,7 +58,7 @@ export default function LoginPage({
       aria-label="登入"
     >
       <div className="glass w-full max-w-sm rounded-3xl border-[0.5px] border-hairline p-6 shadow-[0_8px_32px_rgba(0,0,0,0.08)]">
-        <h1 className="text-2xl font-semibold">人脈記錄</h1>
+        <h1 className="text-2xl font-semibold">福天庭</h1>
         <p className="mt-1 text-sm text-ink-2">
           {step === 'login'
             ? '登入後，你和另一位的資料會自動同步。'
