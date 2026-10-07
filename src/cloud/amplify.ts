@@ -362,7 +362,13 @@ export function createRemoteStore(): RemoteStore {
         // 這代表雲端沒有這張圖（或沒有讀取權限），不是「要重新登入」。
         const name = (e as Error)?.name;
         if (name && AUTH_ERROR_NAMES.has(name) && (await currentGroups()) !== null) {
-          throw new Error(`雲端找不到這張照片，或沒有讀取權限（${name}）`);
+          const status = (e as { $metadata?: { httpStatusCode?: number } })?.$metadata?.httpStatusCode;
+          const session = await fetchAuthSession().catch(() => undefined);
+          const creds = session?.credentials ? '有' : '沒有';
+          throw new Error(
+            `雲端拒絕讀取照片（${name}${status ? ` ${status}` : ''}；登入憑證：${creds}；` +
+              `${((e as Error)?.message ?? '').slice(0, 80)}）`
+          );
         }
         throw mapError(e);
       }
