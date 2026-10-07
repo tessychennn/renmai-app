@@ -56,7 +56,10 @@ export function splitOptions(options: TaskOption[]): SplitOptions {
   };
 }
 
-export const optionName = (list: TaskOption[], id: string | undefined): string | undefined =>
+export const optionName = (
+  list: { id: string; name: string }[],
+  id: string | undefined
+): string | undefined =>
   id ? list.find((o) => o.id === id)?.name : undefined;
 
 export type PriorityTone = 'high' | 'low' | 'normal';
@@ -99,6 +102,23 @@ export function sortBoard(tasks: Task[], priorities: TaskOption[]): Task[] {
       priIndex(a) - priIndex(b) ||
       a.createdAt.localeCompare(b.createdAt)
   );
+}
+
+/**
+ * 待辦排序，但被「直接在列上修改」的任務暫時沿用修改前的值來排。
+ * 這樣改了 Deadline 後那一列不會立刻跳到別的位置（連續編輯時畫面不亂跳）；
+ * 切換畫面或篩選時清掉 frozen，才會依新的值重新排序。
+ */
+export function sortBoardStable(
+  tasks: Task[],
+  priorities: TaskOption[],
+  frozen: ReadonlyMap<string, Task>
+): Task[] {
+  const current = new Map(tasks.map((t) => [t.id, t]));
+  return sortBoard(
+    tasks.map((t) => frozen.get(t.id) ?? t),
+    priorities
+  ).map((t) => current.get(t.id)!);
 }
 
 /** 完成區排序：最近完成的在前 */
@@ -225,6 +245,23 @@ export function newTask(input: TaskInput, createdBy: string | undefined, now = n
 
 export function editTask(task: Task, input: TaskInput, now = new Date()): Task {
   return { ...task, ...fieldsOf(input), updatedAt: now.toISOString() };
+}
+
+/** 列上直接修改的三個欄位。空字串代表清掉（未指派、沒有 Deadline、未設定）。 */
+export interface InlinePatch {
+  ownerId?: string;
+  dueDate?: string;
+  statusId?: string;
+}
+
+export function patchTask(task: Task, patch: InlinePatch, now = new Date()): Task {
+  const next: Task = { ...task, updatedAt: now.toISOString() };
+  for (const key of Object.keys(patch) as (keyof InlinePatch)[]) {
+    const value = patch[key];
+    if (value) next[key] = value;
+    else delete next[key];
+  }
+  return next;
 }
 
 export function completeTask(task: Task, doneBy: string | undefined, now = new Date()): Task {

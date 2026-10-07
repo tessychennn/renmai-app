@@ -18,11 +18,13 @@ import {
   editTask,
   filterTasks,
   newTask,
+  patchTask,
   restoreTask,
-  sortBoard,
+  sortBoardStable,
   sortDone,
   todayStr,
   UNASSIGNED,
+  type InlinePatch,
   type TaskFilter,
   type TaskInput,
 } from '../lib/tasks';
@@ -74,10 +76,13 @@ export default function TasksPage() {
     return options.members.find((m) => m.email?.toLowerCase() === email)?.name;
   }, [role.email, options.members]);
 
+  // 直接在列上改過的任務，暫時沿用修改前的值排序，列不會立刻跳位置；切換畫面或篩選時清掉
+  const [frozen, setFrozen] = useState<Map<string, Task>>(() => new Map());
+
   const filtered = useMemo(() => filterTasks(tasks, filter), [tasks, filter]);
   const open = useMemo(
-    () => sortBoard(filtered.filter((t) => !t.done), options.priorities),
-    [filtered, options.priorities]
+    () => sortBoardStable(filtered.filter((t) => !t.done), options.priorities, frozen),
+    [filtered, options.priorities, frozen]
   );
   const done = useMemo(() => sortDone(filtered.filter((t) => t.done)), [filtered]);
 
@@ -86,7 +91,19 @@ export default function TasksPage() {
   const blocked = options.statuses.find((s) => s.name === '卡住');
   const blockedCount = blocked ? open.filter((t) => t.statusId === blocked.id).length : 0;
 
+  const changeFilter = (patch: Partial<TaskFilter>) => {
+    setFilter((f) => ({ ...f, ...patch }));
+    setFrozen(new Map());
+  };
+
+  const patch = async (task: Task, change: InlinePatch) => {
+    setFrozen((prev) => (prev.has(task.id) ? prev : new Map(prev).set(task.id, task)));
+    await taskRepo.save(patchTask(task, change));
+    reload();
+  };
+
   const changeView = (next: View) => {
+    setFrozen(new Map());
     setView(next);
     try {
       localStorage.setItem(VIEW_KEY, next);
@@ -169,11 +186,7 @@ export default function TasksPage() {
             ))}
           </div>
 
-          <TaskFilters
-            options={options}
-            filter={filter}
-            onChange={(patch) => setFilter((f) => ({ ...f, ...patch }))}
-          />
+          <TaskFilters options={options} filter={filter} onChange={changeFilter} />
         </div>
       </header>
 
@@ -208,8 +221,10 @@ export default function TasksPage() {
               options={options}
               today={today}
               emptyText={emptyFor('目前沒有待辦事項。')}
+              variant="table"
               onToggle={(t) => void toggle(t)}
               onOpen={(t) => setSheet({ task: t })}
+              onPatch={(t, change) => void patch(t, change)}
             />
           </>
         ) : view === 'done' ? (

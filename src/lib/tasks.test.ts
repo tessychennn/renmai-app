@@ -11,10 +11,12 @@ import {
   monthGrid,
   newTask,
   optionUsage,
+  patchTask,
   priorityTone,
   restoreTask,
   shiftMonth,
   sortBoard,
+  sortBoardStable,
   sortDone,
   splitOptions,
   tasksByDate,
@@ -147,6 +149,41 @@ describe('排序', () => {
     const tasks = [task({ id: 'b', dueDate: '2026-10-09' }), task({ id: 'a', dueDate: '2026-10-08' })];
     sortBoard(tasks, priorities);
     expect(tasks.map((t) => t.id)).toEqual(['b', 'a']);
+  });
+});
+
+describe('直接在列上修改', () => {
+  const NOW = new Date('2026-10-07T03:00:00.000Z');
+  const priorities = [opt('priority', 'p1', '高', 0)];
+
+  it('改負責人、Deadline、狀態；空字串＝清掉；同時更新 updatedAt', () => {
+    const base = task({ ownerId: 'm1', dueDate: '2026-10-10', statusId: 's1' });
+    const next = patchTask(base, { ownerId: '', dueDate: '2026-10-20', statusId: 's2' }, NOW);
+    expect(next.ownerId).toBeUndefined();
+    expect('ownerId' in next).toBe(false);
+    expect(next.dueDate).toBe('2026-10-20');
+    expect(next.statusId).toBe('s2');
+    expect(next.updatedAt).toBe(NOW.toISOString());
+    expect(base.ownerId).toBe('m1'); // 不改動原物件
+  });
+
+  it('只改傳進來的欄位，其他不動', () => {
+    const base = task({ ownerId: 'm1', dueDate: '2026-10-10', note: '備註' });
+    const next = patchTask(base, { statusId: 's1' }, NOW);
+    expect(next).toMatchObject({ ownerId: 'm1', dueDate: '2026-10-10', note: '備註', statusId: 's1' });
+  });
+
+  it('被修改過的任務沿用修改前的值排序，列不會立刻跳位置；清掉 frozen 後才重排', () => {
+    const a = task({ id: 'a', dueDate: '2026-10-08' });
+    const b = task({ id: 'b', dueDate: '2026-10-09' });
+    // 使用者把 a 的 Deadline 改到很後面
+    const editedA = patchTask(a, { dueDate: '2026-12-01' }, NOW);
+    const frozen = new Map([['a', a]]);
+
+    expect(sortBoardStable([editedA, b], priorities, frozen).map((t) => t.id)).toEqual(['a', 'b']);
+    // 回傳的是修改後的最新資料，只是位置沿用舊值
+    expect(sortBoardStable([editedA, b], priorities, frozen)[0].dueDate).toBe('2026-12-01');
+    expect(sortBoardStable([editedA, b], priorities, new Map()).map((t) => t.id)).toEqual(['b', 'a']);
   });
 });
 
