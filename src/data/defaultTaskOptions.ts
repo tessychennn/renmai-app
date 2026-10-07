@@ -24,5 +24,6 @@ export const DEFAULT_TASK_OPTIONS: TaskOption[] = [
   ...make('category', 'c', ['業務開發', '行銷', '財務', '行政', '活動', '產品']),
   ...make('member', 'm', ['Tessy', 'Serina']),
   ...make('priority', 'p', ['高', '中', '低']),
-  ...make('status', 's', ['未開始', '進行中', '卡住', '等回覆']),
+  // 前四個沿用原試算表；後三個是原本「合作機會」的狀態，合併進業務開發後也要能選
+  ...make('status', 's', ['未開始', '進行中', '卡住', '等回覆', '需聯繫', '聯繫中', '已約時間']),
 ];

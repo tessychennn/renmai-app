@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useLongPress } from '../hooks/useLongPress';
 import { usePhotoURL } from '../hooks/usePhotoURL';
 import type { Group, Person } from '../data/types';
+import type { ChipTone } from '../lib/prospects';
 import StatusChip from './StatusChip';
 
 /** 卡片進入視窗附近才回傳 true（之後維持 true）。人數多時避免一次讀取幾百張縮圖。 */
@@ -42,11 +43,14 @@ function firstSentence(note?: string): string | undefined {
 export default function PersonCard({
   person,
   groups,
+  prospect,
   onLongPress,
 }: {
   person: Person;
   groups: Group[];
-  /** 長按人物卡（桌面為右鍵）：首頁用來開啟合作狀態選單 */
+  /** 這個人在業務開發裡的狀態標籤（沒有就是還沒列入） */
+  prospect?: { label: string; tone: ChipTone };
+  /** 長按人物卡（桌面為右鍵）：首頁用來開啟業務開發選單 */
   onLongPress?: (person: Person) => void;
 }) {
   const avatarId = person.avatarPhotoId ?? person.photoIds[0];
@@ -67,9 +71,10 @@ export default function PersonCard({
       className="no-callout block overflow-hidden rounded-2xl border-[0.5px] border-hairline bg-white shadow-[0_1px_3px_rgba(0,0,0,0.06)] transition-transform active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink"
     >
       <div className="relative aspect-square w-full bg-ground">
-        {person.collabStatus && (
+        {prospect && (
           <StatusChip
-            status={person.collabStatus}
+            label={prospect.label}
+            tone={prospect.tone}
             className="absolute left-2 top-2 z-10 shadow-[0_1px_4px_rgba(0,0,0,0.2)]"
           />
         )}

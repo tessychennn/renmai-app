@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { personIdOfTask } from '../../data/prospectId';
 import type { Task } from '../../data/types';
 import type { SplitOptions, TaskInput } from '../../lib/tasks';
 
@@ -37,6 +39,8 @@ export default function TaskSheet({
   onClose: () => void;
 }) {
   const editing = Boolean(task);
+  // 從人脈記錄列入業務開發的待辦，可以連回那個人
+  const personId = task ? personIdOfTask(task.id) : undefined;
   const firstCategory = options.categories[0]?.id ?? '';
   const [name, setName] = useState(task?.name ?? '');
   const [categoryId, setCategoryId] = useState(
@@ -101,6 +105,14 @@ export default function TaskSheet({
         style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 16px)' }}
       >
         <p className="text-lg font-semibold">{editing ? '編輯待辦' : '新增待辦'}</p>
+        {personId && (
+          <Link
+            to={`/person/${personId}`}
+            className="mt-1 inline-block text-sm text-ink-2 underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink"
+          >
+            查看人脈資料
+          </Link>
+        )}
 
         <div className="mt-4 flex flex-col gap-3">
           <Field label="項目名稱">

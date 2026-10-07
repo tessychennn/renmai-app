@@ -2,6 +2,7 @@ import 'fake-indexeddb/auto';
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { deletePersonWithPhotos } from '../data';
+import { DEFAULT_TASK_OPTIONS } from '../data/defaultTaskOptions';
 import { closeDB, getDB } from '../data/indexeddb/db';
 import { IndexedDBGroupRepo } from '../data/indexeddb/groupRepo';
 import { IndexedDBPersonRepo } from '../data/indexeddb/personRepo';
@@ -416,7 +417,33 @@ describe('雲端同步', () => {
     const result = await syncNow();
     expect(result.errors).toEqual([]);
     expect(remote.options.size).toBe(0);
-    expect((await taskOptionRepo.list()).length).toBe(15);
+    expect((await taskOptionRepo.list()).length).toBe(DEFAULT_TASK_OPTIONS.length);
+  });
+
+  it('兩支手機各自把同一個人列入業務開發，同步後仍然只有一筆', async () => {
+    await useDevice('A');
+    await ensureDefaultTaskOptions();
+    await taskRepo.save(task({ id: 'prospect-p1', name: '王小明', statusId: 'opt-status-s4' }));
+    await syncNow();
+
+    await useDevice('B');
+    await ensureDefaultTaskOptions();
+    // B 在還沒同步前也自己列入了同一個人（任務編號由人物編號固定推出，所以是同一筆）
+    await taskRepo.save(
+      task({
+        id: 'prospect-p1',
+        name: '王小明',
+        statusId: 'opt-status-s5',
+        updatedAt: '2026-09-12T00:00:00.000Z',
+      })
+    );
+    await syncNow();
+    await useDevice('A');
+    await syncNow();
+
+    expect(remote.tasks.size).toBe(1);
+    expect((await taskRepo.list()).filter((t) => t.id === 'prospect-p1').length).toBe(1);
+    expect((await taskRepo.get('prospect-p1'))?.statusId).toBe('opt-status-s5'); // 較新的勝出
   });
 
   it('管理員改選項名稱會同步，另一支手機（原本是預設值）看到新名稱', async () => {

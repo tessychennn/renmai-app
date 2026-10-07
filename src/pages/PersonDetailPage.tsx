@@ -2,10 +2,17 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import ConfirmSheet from '../components/ConfirmSheet';
 import GlassHeader, { HEADER_PAD } from '../components/GlassHeader';
-import { deletePersonWithPhotos, groupRepo, personRepo } from '../data';
+import {
+  deletePersonWithPhotos,
+  groupRepo,
+  personRepo,
+  taskOptionRepo,
+  taskRepo,
+} from '../data';
+import { prospectTaskId } from '../data/prospectId';
 import { usePhotoURL } from '../hooks/usePhotoURL';
-import { statusLabel } from '../lib/collab';
-import type { Group, Person } from '../data/types';
+import { optionName } from '../lib/tasks';
+import type { Group, Person, Task, TaskOption } from '../data/types';
 
 function PhotoSlide({ photoId }: { photoId: string }) {
   const url = usePhotoURL(photoId, 'full');
@@ -33,10 +40,18 @@ export default function PersonDetailPage() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
+  // 業務開發裡對應的待辦（狀態、負責人、備註都在那裡管理）
+  const [prospect, setProspect] = useState<Task | null>(null);
+  const [statuses, setStatuses] = useState<TaskOption[]>([]);
+  const [members, setMembers] = useState<TaskOption[]>([]);
+
   useEffect(() => {
     if (!id) return;
     void personRepo.get(id).then(setPerson);
     void groupRepo.list().then(setGroups);
+    void taskRepo.get(prospectTaskId(id)).then(setProspect);
+    void taskOptionRepo.list('status').then(setStatuses);
+    void taskOptionRepo.list('member').then(setMembers);
   }, [id]);
 
   const remove = async () => {
@@ -65,10 +80,15 @@ export default function PersonDetailPage() {
   if (person.occasion) rows.push({ label: '場合', value: person.occasion });
   if (person.metDate) rows.push({ label: '認識日期', value: formatDate(person.metDate) });
   if (person.lineName) rows.push({ label: '聯絡帳號', value: person.lineName });
-  if (person.collabStatus) {
-    rows.push({ label: '合作狀態', value: statusLabel(person.collabStatus) });
-    if (person.collabOwner) rows.push({ label: '負責人', value: person.collabOwner });
-    if (person.collabNote) rows.push({ label: '合作備註', value: person.collabNote });
+  if (prospect) {
+    rows.push({
+      label: '業務開發',
+      value: prospect.done ? '完成' : (optionName(statuses, prospect.statusId) ?? '已列入'),
+    });
+    const owner = optionName(members, prospect.ownerId);
+    if (owner) rows.push({ label: '負責人', value: owner });
+    if (prospect.dueDate) rows.push({ label: 'Deadline', value: formatDate(prospect.dueDate) });
+    if (prospect.note) rows.push({ label: '合作備註', value: prospect.note });
   }
 
   return (

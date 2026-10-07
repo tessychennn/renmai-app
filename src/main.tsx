@@ -2,6 +2,8 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import { ensureDefaultGroups, ensureDefaultTaskOptions } from './data';
+import { migrateCollabToTasks } from './lib/prospects';
+import { syncEvents } from './sync/manager';
 import { startUpdateCheck } from './lib/updateCheck';
 import './index.css';
 
@@ -19,7 +21,13 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
 }
 
 // 先補建預設分組再畫畫面，首頁第一次載入就看得到；失敗也不能擋住 App 啟動
+// 原本「合作機會」存在人物上的資料搬成業務開發的待辦（可重複執行）。
+// 另一支手機的資料同步進來後也要再跑一次。
+const migrate = () => void migrateCollabToTasks().catch(() => undefined);
+syncEvents.addEventListener('synced', migrate);
+
 void Promise.all([ensureDefaultGroups(), ensureDefaultTaskOptions()])
+  .then(() => migrateCollabToTasks())
   .catch(() => undefined)
   .finally(() => {
     ReactDOM.createRoot(document.getElementById('root')!).render(

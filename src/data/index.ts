@@ -6,6 +6,7 @@ import { IndexedDBSettingsRepo } from './indexeddb/settingsRepo';
 import { IndexedDBSyncLocal } from './indexeddb/syncLocal';
 import { IndexedDBTaskOptionRepo } from './indexeddb/taskOptionRepo';
 import { IndexedDBTaskRepo } from './indexeddb/taskRepo';
+import { prospectTaskId } from './prospectId';
 import type {
   GroupRepo,
   PersonRepo,
@@ -31,10 +32,11 @@ export { destroyDB as clearAllData } from './indexeddb/db';
 export { ensureDefaultGroups } from './indexeddb/seedGroups';
 export { ensureDefaultTaskOptions } from './indexeddb/seedTaskOptions';
 
-/** 刪除人物並一併刪除其所有照片（規格 5.3：避免孤兒資料） */
+/** 刪除人物並一併刪除其所有照片（規格 5.3：避免孤兒資料）與業務開發裡對應的待辦 */
 export async function deletePersonWithPhotos(id: string): Promise<void> {
   const person = await personRepo.get(id);
   if (!person) return;
   await Promise.all(person.photoIds.map((photoId) => photoRepo.remove(photoId)));
   await personRepo.remove(id);
+  await taskRepo.remove(prospectTaskId(id));
 }

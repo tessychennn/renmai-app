@@ -16,19 +16,6 @@ const TABS = [
     ),
   },
   {
-    to: '/collab',
-    label: '合作機會',
-    end: false,
-    icon: (
-      <path
-        d="M4 7h16M4 12h16M4 17h10"
-        stroke="currentColor"
-        strokeWidth="1.7"
-        strokeLinecap="round"
-      />
-    ),
-  },
-  {
     to: '/tasks',
     label: '待辦',
     end: false,

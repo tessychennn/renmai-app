@@ -6,11 +6,17 @@ import PersonCard from '../components/PersonCard';
 import SyncDot from '../components/SyncDot';
 import TabBar from '../components/TabBar';
 import Toast from '../components/Toast';
-import { groupRepo, personRepo, settingsRepo } from '../data';
+import { groupRepo, personRepo, settingsRepo, taskOptionRepo, taskRepo } from '../data';
 import { isBackupStale } from '../lib/backup';
-import { COLLAB_STATUSES, statusLabel, withCollab } from '../lib/collab';
+import {
+  prospectChip,
+  prospectsByPerson,
+  removeProspect,
+  setProspect,
+  type ProspectChoice,
+} from '../lib/prospects';
 import { syncEvents } from '../sync/manager';
-import type { CollabStatus, Group, Person, PersonSort } from '../data/types';
+import type { Group, Person, PersonSort, Task, TaskOption } from '../data/types';
 
 const SORT_OPTIONS: { value: PersonSort; label: string }[] = [
   { value: 'createdAt-desc', label: '最近加入' },
@@ -49,7 +55,7 @@ export default function HomePage() {
     return () => clearTimeout(timer);
   }, [toast]);
 
-  // 另一支手機的變動同步進來、或在這頁改了合作狀態後，重新載入列表
+  // 另一支手機的變動同步進來、或在這頁改了業務開發狀態後，重新載入列表
   const [reloadTick, setReloadTick] = useState(0);
   useEffect(() => {
     const onSynced = () => setReloadTick((t) => t + 1);
@@ -68,18 +74,37 @@ export default function HomePage() {
       .then(setPersons);
   }, [search, selectedGroupIds, sortKey, reloadTick]);
 
-  // 長按人物卡：標記合作狀態
-  const [collabTarget, setCollabTarget] = useState<Person | null>(null);
-  const setCollabStatus = async (person: Person, status: CollabStatus | null) => {
-    await personRepo.save(withCollab(person, { status }));
-    setCollabTarget(null);
+  // 業務開發：被標記為可合作的人，對應業務開發分類裡的一筆待辦
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [statuses, setStatuses] = useState<TaskOption[]>([]);
+  useEffect(() => {
+    void Promise.all([taskRepo.list(), taskOptionRepo.list('status')]).then(([t, s]) => {
+      setTasks(t);
+      setStatuses(s);
+    });
+  }, [reloadTick]);
+  const prospects = prospectsByPerson(tasks);
+
+  // 長按人物卡：選一個狀態，把這個人列入業務開發
+  const [prospectTarget, setProspectTarget] = useState<Person | null>(null);
+  const applyProspect = async (person: Person, choice: ProspectChoice | null) => {
+    try {
+      if (choice === null) await removeProspect(person.id);
+      else await setProspect(person, choice);
+    } catch (e) {
+      setToast(e instanceof Error ? e.message : '儲存失敗，請再試一次。');
+      return;
+    }
+    setProspectTarget(null);
     setReloadTick((t) => t + 1);
+    const statusName = choice?.done ? '完成' : statuses.find((s) => s.id === choice?.statusId)?.name;
     setToast(
-      status === null
-        ? `已將 ${person.displayName} 移出合作機會`
-        : `${person.displayName}：${statusLabel(status)}`
+      choice === null
+        ? `已將 ${person.displayName} 移出業務開發`
+        : `${person.displayName}：${statusName ?? '已列入業務開發'}`
     );
   };
+  const targetTask = prospectTarget ? prospects.get(prospectTarget.id) : undefined;
 
   const changeSort = (value: PersonSort) => {
     setSortKey(value);
@@ -184,7 +209,14 @@ export default function HomePage() {
           <ul className="grid grid-cols-2 gap-3">
             {persons.map((person) => (
               <li key={person.id}>
-                <PersonCard person={person} groups={groups} onLongPress={setCollabTarget} />
+                <PersonCard
+                  person={person}
+                  groups={groups}
+                  prospect={
+                    prospects.has(person.id) ? prospectChip(prospects.get(person.id)!, statuses) : undefined
+                  }
+                  onLongPress={setProspectTarget}
+                />
               </li>
             ))}
           </ul>
@@ -205,19 +237,26 @@ export default function HomePage() {
       <TabBar />
 
       <ChoiceSheet
-        open={collabTarget !== null}
-        title={collabTarget ? `${collabTarget.displayName} 的合作狀態` : ''}
-        choices={COLLAB_STATUSES.map((s) => ({
-          label: s.label,
-          selected: collabTarget?.collabStatus === s.value,
-          onClick: () => collabTarget && void setCollabStatus(collabTarget, s.value),
-        }))}
+        open={prospectTarget !== null}
+        title={prospectTarget ? `${prospectTarget.displayName} 的業務開發` : ''}
+        choices={[
+          ...statuses.map((s) => ({
+            label: s.name,
+            selected: Boolean(targetTask && !targetTask.done && targetTask.statusId === s.id),
+            onClick: () => prospectTarget && void applyProspect(prospectTarget, { statusId: s.id }),
+          })),
+          {
+            label: '完成',
+            selected: Boolean(targetTask?.done),
+            onClick: () => prospectTarget && void applyProspect(prospectTarget, { done: true }),
+          },
+        ]}
         footer={
-          collabTarget?.collabStatus
-            ? { label: '移出合作機會', onClick: () => void setCollabStatus(collabTarget, null) }
+          targetTask
+            ? { label: '移出業務開發', onClick: () => prospectTarget && void applyProspect(prospectTarget, null) }
             : undefined
         }
-        onClose={() => setCollabTarget(null)}
+        onClose={() => setProspectTarget(null)}
       />
 
       <Toast message={toast} />
