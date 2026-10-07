@@ -575,6 +575,12 @@
               "list",
               "write",
               "delete"
+            ],
+            "groupsadmin": [
+              "get",
+              "list",
+              "write",
+              "delete"
             ]
           }
         }
