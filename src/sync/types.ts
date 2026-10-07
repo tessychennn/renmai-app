@@ -56,6 +56,7 @@ export interface SyncLocal {
   listPhotosToUpload(): Promise<string[]>;
   getPhotoForUpload(id: string): Promise<{ full: Blob; thumb: Blob } | null>;
   markPhotoUploaded(id: string): Promise<void>;
+  requeueAllPhotos(): Promise<number>;
   /** 回傳其中本機還沒有縮圖的 id */
   missingThumbs(ids: string[]): Promise<string[]>;
   savePhotoBlob(id: string, variant: 'full' | 'thumb', blob: Blob): Promise<void>;

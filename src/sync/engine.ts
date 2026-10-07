@@ -179,6 +179,7 @@ export async function runSync(local: SyncLocal, remote: RemoteStore): Promise<Sy
   const persons = await local.listPersons();
   const wanted = [...new Set(persons.filter((p) => !p.deletedAt).flatMap((p) => p.photoIds))];
   const missing = await local.missingThumbs(wanted);
+  const downloadFailures: { id: string; message: string }[] = [];
   await runPool(missing, DOWNLOAD_CONCURRENCY, async (id) => {
     try {
       const blob = await remote.downloadPhoto(id, 'thumb');
@@ -187,9 +188,16 @@ export async function runSync(local: SyncLocal, remote: RemoteStore): Promise<Sy
         result.photosDownloaded++;
       }
     } catch (e) {
-      result.errors.push(`照片 ${id} 下載失敗：${messageOf(e)}`);
+      downloadFailures.push({ id, message: messageOf(e) });
     }
   });
+  // 合成一則，才看得出是「全部」還是「個別」照片有問題
+  if (downloadFailures.length > 0) {
+    const [first] = downloadFailures;
+    result.errors.push(
+      `${downloadFailures.length} 張照片下載失敗（共 ${missing.length} 張待下載），例如 ${first.id}：${first.message}`
+    );
+  }
 
   return result;
 }

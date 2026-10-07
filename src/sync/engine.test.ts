@@ -174,6 +174,42 @@ describe('雲端同步', () => {
     expect(await createdURLs.at(-1)!.text()).toBe('card|full');
   });
 
+  it('雲端漏掉照片時：重新排入上傳後補齊，另一支手機就下載得到', async () => {
+    await useDevice('A');
+    const photoId = await photoRepo.put(new Blob(['card']));
+    await personRepo.save(person({ photoIds: [photoId], avatarPhotoId: photoId }));
+    await syncNow();
+    remote.photos.clear(); // 雲端的照片不見了，但 A 以為已經上傳
+
+    await syncNow();
+    expect(remote.photos.has(photoId)).toBe(false); // 不會自己補傳
+
+    expect(await local.requeueAllPhotos()).toBe(1);
+    await syncNow();
+    expect(remote.photos.has(photoId)).toBe(true);
+
+    await useDevice('B');
+    const down = await syncNow();
+    expect(down.errors).toEqual([]);
+    expect(down.photosDownloaded).toBe(1);
+  });
+
+  it('縮圖下載失敗合成一則錯誤，寫明失敗張數', async () => {
+    await useDevice('A');
+    const ids = [await photoRepo.put(new Blob(['a'])), await photoRepo.put(new Blob(['b']))];
+    await personRepo.save(person({ photoIds: ids, avatarPhotoId: ids[0] }));
+    await syncNow();
+
+    await useDevice('B');
+    remote.downloadPhoto = async () => {
+      throw new Error('雲端找不到這張照片');
+    };
+    const down = await syncNow();
+    expect(down.errors).toHaveLength(1);
+    expect(down.errors[0]).toContain('2 張照片下載失敗');
+    expect(down.errors[0]).toContain('雲端找不到這張照片');
+  });
+
   it('兩人同時編輯同一筆：updatedAt 較新的整筆勝出，兩邊最後一致', async () => {
     await useDevice('A');
     await personRepo.save(person());

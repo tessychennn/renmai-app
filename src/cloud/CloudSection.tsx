@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import ConfirmSheet from '../components/ConfirmSheet';
+import { syncLocal } from '../data';
 import { syncManager } from '../sync/manager';
 import { useSyncState } from '../sync/useSyncState';
 import { signOutAndReload } from './signOutFlow';
@@ -14,6 +15,15 @@ export default function CloudSection({ cardClass }: { cardClass: string }) {
   const sync = useSyncState();
   const [email, setEmail] = useState<string>();
   const [confirmSignOut, setConfirmSignOut] = useState(false);
+
+  const [reuploadMsg, setReuploadMsg] = useState<string>();
+
+  // 雲端漏掉照片時，由還留著原圖的那支手機補傳
+  async function reuploadPhotos() {
+    const n = await syncLocal.requeueAllPhotos();
+    setReuploadMsg(n > 0 ? `已排入 ${n} 張照片，正在上傳。` : '這支手機上沒有可以上傳的原圖。');
+    if (n > 0) await syncManager.sync();
+  }
 
   useEffect(() => {
     void import('./amplify').then((c) => c.currentEmail()).then(setEmail);
@@ -59,6 +69,16 @@ export default function CloudSection({ cardClass }: { cardClass: string }) {
           登出
         </button>
       </div>
+
+      <button
+        type="button"
+        onClick={() => void reuploadPhotos()}
+        disabled={sync.status === 'syncing'}
+        className="mt-3 text-sm text-ink-2 underline disabled:opacity-50"
+      >
+        重新上傳這支手機的照片
+      </button>
+      {reuploadMsg && <p className="mt-1 text-sm text-ink-2">{reuploadMsg}</p>}
 
       <ConfirmSheet
         open={confirmSignOut}

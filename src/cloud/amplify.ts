@@ -359,9 +359,11 @@ export function createRemoteStore(): RemoteStore {
       } catch (e) {
         if (isNotFound(e)) return null;
         // S3 對不存在的檔案常回 AccessDenied（不是 404）。登入明明還有效時，
-        // 這只代表雲端沒有這張圖，不能當成「要重新登入」把整個同步標成失敗。
+        // 這代表雲端沒有這張圖（或沒有讀取權限），不是「要重新登入」。
         const name = (e as Error)?.name;
-        if (name && AUTH_ERROR_NAMES.has(name) && (await currentGroups()) !== null) return null;
+        if (name && AUTH_ERROR_NAMES.has(name) && (await currentGroups()) !== null) {
+          throw new Error(`雲端找不到這張照片，或沒有讀取權限（${name}）`);
+        }
         throw mapError(e);
       }
     },

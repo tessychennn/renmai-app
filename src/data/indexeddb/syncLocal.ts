@@ -171,6 +171,24 @@ export class IndexedDBSyncLocal implements SyncLocal {
     await tx.done;
   }
 
+  /** 把這支手機上有原圖的照片全部標成「待上傳」，用於雲端漏掉照片時補傳。回傳張數。 */
+  async requeueAllPhotos(): Promise<number> {
+    const db = await getDB();
+    const tx = db.transaction('photos', 'readwrite');
+    let count = 0;
+    let cursor = await tx.store.openCursor();
+    while (cursor) {
+      const r = cursor.value;
+      if (r.blob && r.thumbBlob) {
+        await cursor.update({ ...r, uploaded: false });
+        count++;
+      }
+      cursor = await cursor.continue();
+    }
+    await tx.done;
+    return count;
+  }
+
   async missingThumbs(ids: string[]): Promise<string[]> {
     const db = await getDB();
     const missing: string[] = [];
