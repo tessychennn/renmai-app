@@ -9,18 +9,18 @@
   /* 待辦的到期提醒：今天（較深）與快到期（較淺），低飽和的暖色 */
   --color-warn-soft: #f0e2c4;
   --color-soon: #f5ebd6;
-  /* 狀態標籤（巴洛克色系）：深寶石色底＋米白字；黃色是古金，用深褐字。
-     灰＝錫灰、綠＝祖母綠、黃＝古金、紅＝勃艮地酒紅、紫＝皇家紫 */
-  --color-status-gray: #6f6a60;
-  --color-status-gray-ink: #f6efdd;
-  --color-status-green: #1f5a46;
-  --color-status-green-ink: #f6efdd;
-  --color-status-yellow: #d4a94f;
-  --color-status-yellow-ink: #2e2108;
-  --color-status-red: #7e1f2e;
-  --color-status-red-ink: #f6efdd;
-  --color-status-purple: #54336e;
-  --color-status-purple-ink: #f6efdd;
+  /* 狀態標籤（莫蘭迪色系）：低飽和的灰調底＋同色系深字。
+     灰＝暖灰、綠＝鼠尾草綠、黃＝燕麥黃、紅＝乾燥玫瑰、紫＝灰紫 */
+  --color-status-gray: #dad7d2;
+  --color-status-gray-ink: #58544f;
+  --color-status-green: #cad4c3;
+  --color-status-green-ink: #43523e;
+  --color-status-yellow: #e6d8b0;
+  --color-status-yellow-ink: #62521f;
+  --color-status-red: #dfbbb3;
+  --color-status-red-ink: #74382f;
+  --color-status-purple: #d0c5d8;
+  --color-status-purple-ink: #573f66;
 }
 
 html,

@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import { ensureDefaultGroups, ensureDefaultTaskOptions } from './data';
+import { pruneLegacyStatuses } from './lib/pruneStatuses';
 import { migrateCollabToTasks } from './lib/prospects';
 import { syncEvents } from './sync/manager';
 import { startUpdateCheck } from './lib/updateCheck';
@@ -25,9 +26,12 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
 // 另一支手機的資料同步進來後也要再跑一次。
 const migrate = () => void migrateCollabToTasks().catch(() => undefined);
 syncEvents.addEventListener('synced', migrate);
+// 一次性清掉預設五個以外的狀態（管理員的裝置；有雲端時等第一次同步成功後）
+syncEvents.addEventListener('completed', () => void pruneLegacyStatuses(true).catch(() => undefined));
 
 void Promise.all([ensureDefaultGroups(), ensureDefaultTaskOptions()])
   .then(() => migrateCollabToTasks())
+  .then(() => pruneLegacyStatuses())
   .catch(() => undefined)
   .finally(() => {
     ReactDOM.createRoot(document.getElementById('root')!).render(

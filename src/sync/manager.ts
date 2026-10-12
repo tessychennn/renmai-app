@@ -125,6 +125,7 @@ class SyncManager {
         this.setState({ status: 'error', error: result.errors[0], lastSyncAt });
       } else {
         this.setState({ status: 'idle', lastSyncAt });
+        syncEvents.dispatchEvent(new Event('completed'));
       }
       if (result.pulled > 0 || result.photosDownloaded > 0) {
         syncEvents.dispatchEvent(new Event('synced'));
