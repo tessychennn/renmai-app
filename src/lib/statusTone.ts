@@ -16,7 +16,7 @@ export function statusColor(name: string | undefined): StatusColor | undefined {
   return name ? COLOR_BY_NAME[name] : undefined;
 }
 
-/** 淡色底＋同色系深字；class 要寫成完整字串，Tailwind 才掃得到 */
+/** 巴洛克色系（色票在 index.css）；class 要寫成完整字串，Tailwind 才掃得到 */
 export const STATUS_BADGE: Record<StatusColor, string> = {
   gray: 'border-transparent bg-status-gray text-status-gray-ink',
   green: 'border-transparent bg-status-green text-status-green-ink',
