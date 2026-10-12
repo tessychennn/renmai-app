@@ -1,7 +1,7 @@
 import { onLocalChange } from '../data/changeSignal';
 import { runSync } from './engine';
 import { AuthRequiredError } from './errors';
-import type { RemoteStore, SyncLocal } from './types';
+import type { RemoteStore, SyncLocal, SyncScope } from './types';
 
 export type SyncStatus = 'idle' | 'syncing' | 'error' | 'offline' | 'auth-required';
 
@@ -37,6 +37,7 @@ class SyncManager {
   private listeners = new Set<() => void>();
   private local: SyncLocal | null = null;
   private remote: RemoteStore | null = null;
+  private scope: SyncScope = 'all';
   private running = false;
   private queued = false;
   private debounce: ReturnType<typeof setTimeout> | undefined;
@@ -55,10 +56,11 @@ class SyncManager {
     for (const l of this.listeners) l();
   }
 
-  start(local: SyncLocal, remote: RemoteStore): void {
+  start(local: SyncLocal, remote: RemoteStore, scope: SyncScope = 'all'): void {
     this.stop();
     this.local = local;
     this.remote = remote;
+    this.scope = scope;
 
     this.cleanups.push(
       onLocalChange(() => this.requestSync(PUSH_DEBOUNCE_MS))
@@ -114,7 +116,7 @@ class SyncManager {
     this.running = true;
     this.setState({ status: 'syncing', error: undefined });
     try {
-      const result = await runSync(this.local, this.remote);
+      const result = await runSync(this.local, this.remote, this.scope);
       const lastSyncAt = new Date().toISOString();
       try {
         localStorage.setItem(LAST_SYNC_KEY, lastSyncAt);

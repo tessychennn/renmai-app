@@ -24,8 +24,6 @@ export const DEFAULT_TASK_OPTIONS: TaskOption[] = [
   ...make('category', 'c', ['業務開發', '行銷', '財務', '行政', '活動', '產品']),
   ...make('member', 'm', ['Tessy', 'Serina']),
   ...make('priority', 'p', ['高', '中', '低']),
-  // 進度追蹤的大項目（管理員可以在待辦設定新增、改名）
-  ...make('project', 'j', ['WebApp 細節修改', 'App', '網頁', 'AI']),
   // 識別碼沿用舊的編號（s0、s1、s3、s4、s5）：已經建好預設選項的手機不會因此多出重複的狀態。
   // 舊預設裡的「卡住」（s2）與「已約時間」（s6）不再預設提供，已有的人要在待辦設定自行刪除。
   ...[

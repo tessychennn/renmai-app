@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import AccountMenu from '../cloud/AccountMenu';
+import { useRole } from '../hooks/useRole';
 
 const iconButton =
   'flex h-9 w-9 items-center justify-center rounded-full text-ink-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink';
@@ -43,6 +44,15 @@ function SlidersIcon() {
  * 「設定」永遠在最右邊，所有主要分頁位置一致。
  */
 export default function HeaderActions({ taskSettings = false }: { taskSettings?: boolean }) {
+  const { limited } = useRole();
+  // 技術端只能用產品進度：沒有待辦設定與設定頁，只留帳號（可以登出）
+  if (limited) {
+    return (
+      <div className="flex items-center">
+        <AccountMenu />
+      </div>
+    );
+  }
   return (
     <div className="flex items-center">
       <AccountMenu />

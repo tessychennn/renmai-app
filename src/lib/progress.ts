@@ -1,47 +1,23 @@
-import type {
-  OpsPriority,
-  ProgressItem,
-  ProgressStatus,
-  TaskOption,
-  TechLevel,
-} from '../data/types';
-import { type StatusColor } from './statusTone';
+import type { OpsPriority, ProgressItem, ProgressStatus, TechLevel } from '../data/types';
+import {
+  OPS_PRIORITY_CHOICES,
+  PROGRESS_STATUS_CHOICES,
+  PROGRESS_TEXT,
+  PROJECTS,
+  TECH_LEVEL_CHOICES,
+  type Choice,
+} from '../text/productProgress';
+import type { StatusColor } from './statusTone';
 import { todayStr } from './tasks';
 
-// 進度追蹤：營運端排「優先級」，技術端排「技術等級」，兩個欄位分開、由不同的人填。
+// 產品進度：營運端排「優先級」，技術端排「技術等級」，兩個欄位分開、由不同的人填。
+// 所有顯示的文字與選項清單都在 src/text/productProgress.ts。
 
-export interface Choice<T extends string> {
-  value: T;
-  label: string;
-  /** 下拉選單裡的說明 */
-  hint: string;
-  color: StatusColor;
-}
+export type { Choice };
 
-export const OPS_PRIORITIES: readonly Choice<OpsPriority>[] = [
-  { value: 'P0', label: 'P0', hint: '緊急：壞了或擋住營運，立刻處理', color: 'red' },
-  { value: 'P1', label: 'P1', hint: '本月一定要做', color: 'yellow' },
-  { value: 'P2', label: 'P2', hint: '排隊，有空檔就做', color: 'blue' },
-  { value: 'P3', label: 'P3', hint: '想做但不急，或先擱著', color: 'gray' },
-];
-
-export const TECH_LEVELS: readonly Choice<TechLevel>[] = [
-  { value: 'S', label: 'S', hint: '半天以內', color: 'green' },
-  { value: 'M', label: 'M', hint: '1 到 3 天', color: 'yellow' },
-  { value: 'L', label: 'L', hint: '1 到 2 週', color: 'red' },
-  { value: 'XL', label: 'XL', hint: '兩週以上', color: 'purple' },
-  { value: 'R', label: '需研究', hint: '還估不出來，要先研究', color: 'gray' },
-];
-
-export const PROGRESS_STATUSES: readonly Choice<ProgressStatus>[] = [
-  { value: 'proposed', label: '提出', hint: '營運剛提出，技術端還沒看', color: 'gray' },
-  { value: 'assessing', label: '評估中', hint: '技術端正在評估', color: 'purple' },
-  { value: 'scheduled', label: '排程中', hint: '評估完，排進開發', color: 'yellow' },
-  { value: 'building', label: '開發中', hint: '正在做', color: 'blue' },
-  { value: 'testing', label: '測試中', hint: '做好了，在測試', color: 'green' },
-  { value: 'done', label: '完成', hint: '已上線', color: 'gray' },
-  { value: 'paused', label: '暫緩', hint: '先擱置', color: 'gray' },
-];
+export const OPS_PRIORITIES: readonly Choice<OpsPriority>[] = OPS_PRIORITY_CHOICES;
+export const TECH_LEVELS: readonly Choice<TechLevel>[] = TECH_LEVEL_CHOICES;
+export const PROGRESS_STATUSES: readonly Choice<ProgressStatus>[] = PROGRESS_STATUS_CHOICES;
 
 const parser =
   <T extends string>(list: readonly Choice<T>[]) =>
@@ -63,9 +39,9 @@ export const colorOf = <T extends string>(list: readonly Choice<T>[], value: T |
 export type ProgressSort = 'ops' | 'tech' | 'due';
 
 export const SORT_LABEL: Record<ProgressSort, string> = {
-  ops: '營運優先',
-  tech: '技術等級',
-  due: '目標日期',
+  ops: PROGRESS_TEXT.sortOps,
+  tech: PROGRESS_TEXT.sortTech,
+  due: PROGRESS_TEXT.sortDue,
 };
 
 const NO_DATE = '9999-99-99';
@@ -116,35 +92,33 @@ export function sortItemsStable(
 }
 
 export interface ProgressFilter {
-  /** 大項目的選項編號 */
+  /** 大項目的編號 */
   projectId?: string;
-  /** 負責人的選項編號；'unassigned' = 未指派 */
-  ownerId?: string;
 }
-
-export const UNASSIGNED = 'unassigned';
 
 export function filterItems(items: ProgressItem[], filter: ProgressFilter): ProgressItem[] {
-  return items.filter((i) => {
-    if (filter.projectId && i.projectId !== filter.projectId) return false;
-    if (filter.ownerId === UNASSIGNED && i.ownerId) return false;
-    if (filter.ownerId && filter.ownerId !== UNASSIGNED && i.ownerId !== filter.ownerId) return false;
-    return true;
-  });
+  return items.filter((i) => !filter.projectId || i.projectId === filter.projectId);
 }
 
+export interface ProjectRef {
+  id: string;
+  name: string;
+}
+
+export const projects: readonly ProjectRef[] = PROJECTS;
+
 export interface ProjectGroup {
-  /** null = 項目的大項目已被刪除（找不到對應選項） */
-  project: TaskOption | null;
+  /** null = 項目的大項目不在清單裡（例如從清單刪掉了） */
+  project: ProjectRef | null;
   items: ProgressItem[];
 }
 
 /** 依大項目清單的順序分組，空的大項目不列出；找不到大項目的歸在最後一組 */
-export function groupByProject(items: ProgressItem[], projects: TaskOption[]): ProjectGroup[] {
-  const groups: ProjectGroup[] = projects
+export function groupByProject(items: ProgressItem[], projectList: readonly ProjectRef[] = projects): ProjectGroup[] {
+  const groups: ProjectGroup[] = projectList
     .map((project) => ({ project, items: items.filter((i) => i.projectId === project.id) }))
     .filter((g) => g.items.length > 0);
-  const known = new Set(projects.map((p) => p.id));
+  const known = new Set(projectList.map((p) => p.id));
   const orphans = items.filter((i) => !known.has(i.projectId));
   if (orphans.length > 0) groups.push({ project: null, items: orphans });
   return groups;
@@ -181,7 +155,6 @@ export interface ProgressInput {
   opsPriority?: OpsPriority;
   techLevel?: TechLevel;
   status: ProgressStatus;
-  ownerId?: string;
   dueDate?: string;
   opsNote?: string;
   techNote?: string;
@@ -199,7 +172,6 @@ function fieldsOf(input: ProgressInput) {
     opsPriority: input.opsPriority,
     techLevel: input.techLevel,
     status: input.status,
-    ownerId: clean(input.ownerId),
     dueDate: clean(input.dueDate),
     opsNote: clean(input.opsNote),
     techNote: clean(input.techNote),
@@ -239,7 +211,6 @@ export interface ProgressPatch {
   opsPriority?: OpsPriority | '';
   techLevel?: TechLevel | '';
   status?: ProgressStatus;
-  ownerId?: string;
   dueDate?: string;
 }
 
@@ -254,11 +225,17 @@ export function patchItem(item: ProgressItem, patch: ProgressPatch, now = new Da
     else delete next.techLevel;
   }
   if (patch.status !== undefined) next.status = patch.status;
-  for (const key of ['ownerId', 'dueDate'] as const) {
-    const value = patch[key];
-    if (value === undefined) continue;
-    if (value) next[key] = value;
-    else delete next[key];
+  if (patch.dueDate !== undefined) {
+    if (patch.dueDate) next.dueDate = patch.dueDate;
+    else delete next.dueDate;
   }
   return withDoneDate(item, next, now);
 }
+
+/** 打勾完成。完成日自動記錄 */
+export const completeItem = (item: ProgressItem, now = new Date()): ProgressItem =>
+  patchItem(item, { status: 'done' }, now);
+
+/** 取消完成：退回「測試中」（完成前的最後一個階段） */
+export const reopenItem = (item: ProgressItem, now = new Date()): ProgressItem =>
+  patchItem(item, { status: 'testing' }, now);

@@ -73,7 +73,7 @@ export function personToFields(p: Person) {
   };
 }
 
-const OPTION_KINDS: readonly TaskOptionKind[] = ['category', 'member', 'priority', 'status', 'project'];
+const OPTION_KINDS: readonly TaskOptionKind[] = ['category', 'member', 'priority', 'status'];
 
 export function rowToTask(row: Schema['Task']['type']): Task {
   return {

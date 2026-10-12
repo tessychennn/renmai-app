@@ -1,5 +1,5 @@
 import { OPTION_SEED_TIME } from '../data/defaultTaskOptions';
-import type { EntityKind, RemoteStore, SyncLocal, SyncResult } from './types';
+import type { EntityKind, RemoteStore, SyncLocal, SyncResult, SyncScope } from './types';
 
 // 同步策略（共用資料、資料量在數百到數千筆以內）：
 // - 每次同步先「全量拉取」再「上傳待上傳的變動」。全量拉取省掉游標與時鐘差的問題，
@@ -61,7 +61,15 @@ async function mergeEntities<T extends Entity>(opts: {
   return applied;
 }
 
-export async function runSync(local: SyncLocal, remote: RemoteStore): Promise<SyncResult> {
+/** 條件不成立就直接回空清單（不呼叫雲端、也不讀本機） */
+const when = <T>(on: boolean, load: () => Promise<T[]>): Promise<T[]> => (on ? load() : Promise.resolve([]));
+
+export async function runSync(
+  local: SyncLocal,
+  remote: RemoteStore,
+  scope: SyncScope = 'all'
+): Promise<SyncResult> {
+  const full = scope === 'all';
   const result: SyncResult = {
     pulled: 0,
     pushed: 0,
@@ -70,7 +78,7 @@ export async function runSync(local: SyncLocal, remote: RemoteStore): Promise<Sy
     errors: [],
   };
 
-  if (!(await local.isInitialized())) await local.initialize();
+  if (!(await local.isInitialized(scope))) await local.initialize(scope);
 
   // 1. 拉取：雲端這頭失敗就整個中止（什麼都還沒動）
   const [
@@ -85,15 +93,15 @@ export async function runSync(local: SyncLocal, remote: RemoteStore): Promise<Sy
     localOptions,
     localProgress,
   ] = await Promise.all([
-    remote.listPersons(),
-    remote.listGroups(),
-    remote.listTasks(),
-    remote.listOptions(),
+    when(full, () => remote.listPersons()),
+    when(full, () => remote.listGroups()),
+    when(full, () => remote.listTasks()),
+    when(full, () => remote.listOptions()),
     remote.listProgress(),
-    local.listPersons(),
-    local.listGroups(),
-    local.listTasks(),
-    local.listOptions(),
+    when(full, () => local.listPersons()),
+    when(full, () => local.listGroups()),
+    when(full, () => local.listTasks()),
+    when(full, () => local.listOptions()),
     local.listProgress(),
   ]);
 
@@ -136,7 +144,7 @@ export async function runSync(local: SyncLocal, remote: RemoteStore): Promise<Sy
   });
 
   // 2. 上傳照片（先於人物，避免別人拉到人物卻抓不到照片）
-  for (const id of await local.listPhotosToUpload()) {
+  for (const id of full ? await local.listPhotosToUpload() : []) {
     try {
       const blobs = await local.getPhotoForUpload(id);
       if (!blobs) continue;
@@ -150,6 +158,7 @@ export async function runSync(local: SyncLocal, remote: RemoteStore): Promise<Sy
 
   // 3. 上傳待上傳的變動；單筆失敗不擋其他筆，標記保留到下次重試
   for (const entry of await local.listDirty()) {
+    if (!full && entry.kind !== 'item') continue; // 其他資料這個帳號沒有權限，留著不動
     try {
       if (entry.kind === 'photo') {
         await remote.deletePhotos([entry.id]);
@@ -189,7 +198,7 @@ export async function runSync(local: SyncLocal, remote: RemoteStore): Promise<Sy
   }
 
   // 4. 補下載本機缺的縮圖（完整版等使用者點開才下載）
-  const persons = await local.listPersons();
+  const persons = await when(full, () => local.listPersons());
   const wanted = [...new Set(persons.filter((p) => !p.deletedAt).flatMap((p) => p.photoIds))];
   const missing = await local.missingThumbs(wanted);
   const downloadFailures: { id: string; message: string }[] = [];

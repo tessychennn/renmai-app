@@ -1,31 +1,25 @@
 import { useEffect, useState } from 'react';
 import { cloudEnabled } from '../cloud/config';
-
-const ADMIN_CACHE_KEY = 'renmai.isAdmin';
-
-function readCachedAdmin(): boolean {
-  try {
-    return localStorage.getItem(ADMIN_CACHE_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
+import { cacheRole, cachedAdmin, cachedLimited } from '../lib/roles';
 
 export interface Role {
   /** 管理員可以修改待辦的選項設定。沒有啟用雲端時就是自己一個人用，視為管理員。 */
   isAdmin: boolean;
+  /** 只能用產品進度的人（技術端）：畫面上只留產品進度。真正的限制在伺服器端。 */
+  limited: boolean;
   /** 登入的信箱（沒有雲端或讀不到時是 undefined） */
   email?: string;
 }
 
 /**
- * 目前登入者的身分，取自 Cognito 的 admin 群組。
+ * 目前登入者的身分，取自 Cognito 的群組（admin、team、tech）。
  * 離線或讀不到時沿用上次已知的結果。真正的權限由 AWS 伺服器強制執行，
- * 這裡只是決定畫面上要不要顯示編輯按鈕。
+ * 這裡只是決定畫面上要不要顯示那些頁面與按鈕。
  */
 export function useRole(): Role {
   const [role, setRole] = useState<Role>(() => ({
-    isAdmin: cloudEnabled ? readCachedAdmin() : true,
+    isAdmin: cloudEnabled ? cachedAdmin() : true,
+    limited: cloudEnabled ? cachedLimited() : false,
   }));
 
   useEffect(() => {
@@ -40,13 +34,7 @@ export function useRole(): Role {
           setRole((r) => ({ ...r, email }));
           return;
         }
-        const isAdmin = groups.includes('admin');
-        try {
-          localStorage.setItem(ADMIN_CACHE_KEY, isAdmin ? '1' : '0');
-        } catch {
-          // 存不了只影響離線時的顯示
-        }
-        setRole({ isAdmin, email });
+        setRole({ ...cacheRole(groups), email });
       } catch {
         // 讀不到身分就沿用快取
       }

@@ -1,4 +1,6 @@
 import { NavLink } from 'react-router-dom';
+import { useRole } from '../hooks/useRole';
+import { PROGRESS_TEXT } from '../text/productProgress';
 
 const TABS = [
   {
@@ -31,7 +33,7 @@ const TABS = [
   },
   {
     to: '/progress',
-    label: '進度',
+    label: PROGRESS_TEXT.tabLabel,
     end: false,
     icon: (
       <path
@@ -47,6 +49,9 @@ const TABS = [
 
 /** 下方分頁列：毛玻璃固定在底部，預留 home indicator 的安全區域 */
 export default function TabBar() {
+  const { limited } = useRole();
+  // 技術端只有產品進度一頁，不需要分頁列
+  if (limited) return null;
   return (
     <nav
       aria-label="主要分頁"

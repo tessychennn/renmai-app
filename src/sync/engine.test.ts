@@ -254,6 +254,35 @@ describe('雲端同步', () => {
     expect(remote.progress.get('i1')?.name).toBe(''); // 墓碑不留名稱
   });
 
+  it('只同步產品進度的帳號（技術端）：不讀不寫其他資料，其他待上傳的資料留著不動', async () => {
+    await useDevice('A');
+    await personRepo.save(person());
+    await progressRepo.save({
+      id: 'i1',
+      name: '改登入頁',
+      projectId: 'opt-project-j0',
+      status: 'proposed',
+      createdAt: '2026-09-01T00:00:00.000Z',
+      updatedAt: '2026-09-01T00:00:00.000Z',
+    });
+    const forbidden = async () => {
+      throw new Error('Unauthorized：這個帳號不能讀這張表');
+    };
+    remote.listPersons = forbidden;
+    remote.listGroups = forbidden;
+    remote.listTasks = forbidden;
+    remote.listOptions = forbidden;
+    remote.putPerson = forbidden;
+
+    const result = await runSync(local, remote, 'progress');
+    expect(result.errors).toEqual([]);
+    expect(remote.progress.get('i1')?.name).toBe('改登入頁');
+    expect((await local.listDirty()).map((d) => d.key)).toEqual(['person:p1']); // 人物沒被碰
+
+    // 以後升級成團隊成員時，會用完整範圍重新初始化，人物才補上傳
+    expect(await local.isInitialized('all')).toBe(false);
+  });
+
   it('兩人同時編輯同一筆：updatedAt 較新的整筆勝出，兩邊最後一致', async () => {
     await useDevice('A');
     await personRepo.save(person());

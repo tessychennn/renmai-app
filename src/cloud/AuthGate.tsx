@@ -54,11 +54,12 @@ function CloudAuthGate({ children }: { children: ReactNode }) {
     if (sync.status === 'auth-required') setReauth(true);
   }, [sync.status]);
 
-  const onLoggedIn = () => {
+  const onLoggedIn = async () => {
     markSignedIn();
     setReauth(false);
+    // 先確認身分（技術端只能看到產品進度）再進 App，不然會先閃一下完整的畫面
+    await startCloudSync().catch(() => undefined);
     setPhase('ready');
-    void startCloudSync();
   };
 
   if (phase === 'checking') return <div className="min-h-dvh bg-ground" />;

@@ -73,7 +73,7 @@ export function planLegacyImport(
   /** 名稱 → 編號。已存在同名的沿用；沒有的建立（順序接在現有的後面） */
   const maps = {} as Record<TaskOptionKind, Map<string, string>>;
   const nextOrder = {} as Record<TaskOptionKind, number>;
-  const kinds: TaskOptionKind[] = ['category', 'member', 'priority', 'status', 'project'];
+  const kinds: TaskOptionKind[] = ['category', 'member', 'priority', 'status'];
   for (const kind of kinds) {
     const live = existingOptions.filter((o) => o.kind === kind && !o.deletedAt);
     maps[kind] = new Map(live.map((o) => [o.name, o.id]));

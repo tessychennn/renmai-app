@@ -1,9 +1,9 @@
 import { OPTION_SEED_TIME } from '../defaultTaskOptions';
 import { dirtyKey, getDB, savePhotoVariant } from './db';
 import type { Group, Person, ProgressItem, Task, TaskOption } from '../types';
-import type { DirtyEntry, EntityKind, SyncLocal } from '../../sync/types';
+import type { DirtyEntry, EntityKind, SyncLocal, SyncScope } from '../../sync/types';
 
-const INITIALIZED_KEY = 'cloudInitialized';
+const initializedKey = (scope: SyncScope) => (scope === 'all' ? 'cloudInitialized' : `cloudInitialized:${scope}`);
 
 /** 單筆資料種類 → 對應的 object store */
 const STORE_OF = {
@@ -15,37 +15,39 @@ const STORE_OF = {
 } as const;
 
 export class IndexedDBSyncLocal implements SyncLocal {
-  async isInitialized(): Promise<boolean> {
+  async isInitialized(scope: SyncScope = 'all'): Promise<boolean> {
     const db = await getDB();
-    return (await db.get('syncMeta', INITIALIZED_KEY)) === true;
+    return (await db.get('syncMeta', initializedKey(scope))) === true;
   }
 
-  async initialize(): Promise<void> {
+  async initialize(scope: SyncScope = 'all'): Promise<void> {
     const db = await getDB();
     const tx = db.transaction(
       ['persons', 'groups', 'tasks', 'taskOptions', 'progress', 'dirty', 'syncMeta'],
       'readwrite'
     );
     const dirty = tx.objectStore('dirty');
-    for (const p of await tx.objectStore('persons').getAll()) {
-      await dirty.put({ key: dirtyKey('person', p.id), kind: 'person', id: p.id });
-    }
-    for (const g of await tx.objectStore('groups').getAll()) {
-      await dirty.put({ key: dirtyKey('group', g.id), kind: 'group', id: g.id });
-    }
-    for (const t of await tx.objectStore('tasks').getAll()) {
-      await dirty.put({ key: dirtyKey('task', t.id), kind: 'task', id: t.id });
-    }
     for (const i of await tx.objectStore('progress').getAll()) {
       await dirty.put({ key: dirtyKey('item', i.id), kind: 'item', id: i.id });
     }
-    for (const o of await tx.objectStore('taskOptions').getAll()) {
-      // 沒被改過的預設選項不上傳（見 defaultTaskOptions.ts）
-      if (o.updatedAt !== OPTION_SEED_TIME) {
-        await dirty.put({ key: dirtyKey('option', o.id), kind: 'option', id: o.id });
+    if (scope === 'all') {
+      for (const p of await tx.objectStore('persons').getAll()) {
+        await dirty.put({ key: dirtyKey('person', p.id), kind: 'person', id: p.id });
+      }
+      for (const g of await tx.objectStore('groups').getAll()) {
+        await dirty.put({ key: dirtyKey('group', g.id), kind: 'group', id: g.id });
+      }
+      for (const t of await tx.objectStore('tasks').getAll()) {
+        await dirty.put({ key: dirtyKey('task', t.id), kind: 'task', id: t.id });
+      }
+      for (const o of await tx.objectStore('taskOptions').getAll()) {
+        // 沒被改過的預設選項不上傳（見 defaultTaskOptions.ts）
+        if (o.updatedAt !== OPTION_SEED_TIME) {
+          await dirty.put({ key: dirtyKey('option', o.id), kind: 'option', id: o.id });
+        }
       }
     }
-    await tx.objectStore('syncMeta').put(true, INITIALIZED_KEY);
+    await tx.objectStore('syncMeta').put(true, initializedKey(scope));
     await tx.done;
   }
 

@@ -3,6 +3,12 @@ import type { DirtyEntry } from '../data/indexeddb/db';
 
 export type { DirtyEntry };
 
+/**
+ * 同步範圍。all＝全部；progress＝只同步產品進度（技術端帳號，伺服器也只開放這張表，
+ * 去讀其他資料會被拒絕，所以引擎根本不去碰）。
+ */
+export type SyncScope = 'all' | 'progress';
+
 /** 同步引擎處理「單筆資料」的種類（照片另外處理） */
 export type EntityKind = 'person' | 'group' | 'task' | 'option' | 'item';
 
@@ -27,9 +33,9 @@ export interface RemoteStore {
 
 /** 本機端點。同步引擎透過它讀寫本機資料庫。 */
 export interface SyncLocal {
-  isInitialized(): Promise<boolean>;
-  /** 第一次啟用雲端：把現有的全部資料標記為待上傳 */
-  initialize(): Promise<void>;
+  isInitialized(scope?: SyncScope): Promise<boolean>;
+  /** 第一次啟用雲端：把現有的資料標記為待上傳（只同步產品進度的帳號只標記產品進度） */
+  initialize(scope?: SyncScope): Promise<void>;
 
   /** 全部資料，含墓碑 */
   listPersons(): Promise<Person[]>;

@@ -32,7 +32,7 @@ export interface Group {
 }
 
 /** 待辦的選項清單：分類、成員、優先級、狀態。任務用編號引用，改名不需要同步舊任務。 */
-export type TaskOptionKind = 'category' | 'member' | 'priority' | 'status' | 'project';
+export type TaskOptionKind = 'category' | 'member' | 'priority' | 'status';
 
 export interface TaskOption {
   id: string;
@@ -78,7 +78,7 @@ export type ProgressStatus =
   | 'done'
   | 'paused';
 
-/** 進度追蹤的一個小項目；大項目（projectId）是待辦選項裡 kind = 'project' 的那一種 */
+/** 產品進度的一個小項目；大項目（projectId）的清單在 src/text/productProgress.ts */
 export interface ProgressItem {
   id: string;
   name: string;
@@ -86,7 +86,6 @@ export interface ProgressItem {
   opsPriority?: OpsPriority;
   techLevel?: TechLevel;
   status: ProgressStatus;
-  ownerId?: string;
   /** 目標日期 YYYY-MM-DD */
   dueDate?: string;
   /** 營運端的備註：為什麼需要、希望達到什麼 */

@@ -3,9 +3,8 @@ import { IDBFactory } from 'fake-indexeddb';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { Schema } from '../../amplify/data/resource';
 import { progressToFields, rowToProgress } from '../cloud/progressMapping';
-import { progressRepo, taskOptionRepo } from '../data';
+import { progressRepo } from '../data';
 import { closeDB, getDB } from '../data/indexeddb/db';
-import { ensureDefaultTaskOptions } from '../data/indexeddb/seedTaskOptions';
 import type { ProgressItem } from '../data/types';
 import {
   editItem,
@@ -15,9 +14,9 @@ import {
   patchItem,
   sortItems,
   summarize,
-  UNASSIGNED,
+  completeItem,
+  reopenItem,
 } from './progress';
-import { optionUsage, splitOptions } from './tasks';
 
 const item = (id: string, o: Partial<ProgressItem> = {}): ProgressItem => ({
   id,
@@ -59,21 +58,20 @@ describe('排序', () => {
 
 describe('篩選與分組', () => {
   const items = [
-    item('a', { projectId: 'p1', ownerId: 'm1' }),
+    item('a', { projectId: 'p1' }),
     item('bb', { projectId: 'p2' }),
     item('ccc', { projectId: 'p1' }),
     item('dddd', { projectId: 'gone' }),
   ];
   const projects = [
-    { id: 'p1', kind: 'project' as const, name: 'App', order: 0, updatedAt: 'x' },
-    { id: 'p2', kind: 'project' as const, name: 'AI', order: 1, updatedAt: 'x' },
-    { id: 'p3', kind: 'project' as const, name: '空的', order: 2, updatedAt: 'x' },
+    { id: 'p1', name: 'App' },
+    { id: 'p2', name: 'AI' },
+    { id: 'p3', name: '空的' },
   ];
 
-  it('依大項目與負責人篩選', () => {
+  it('依大項目篩選；沒選就是全部', () => {
     expect(ids(filterItems(items, { projectId: 'p1' }))).toEqual(['a', 'ccc']);
-    expect(ids(filterItems(items, { ownerId: 'm1' }))).toEqual(['a']);
-    expect(ids(filterItems(items, { ownerId: UNASSIGNED }))).toEqual(['bb', 'ccc', 'dddd']);
+    expect(ids(filterItems(items, {}))).toEqual(['a', 'bb', 'ccc', 'dddd']);
   });
 
   it('依大項目清單的順序分組；空的不列出；找不到大項目的放最後', () => {
@@ -99,13 +97,12 @@ describe('摘要', () => {
 });
 
 describe('建立與修改', () => {
-  const input = { name: '  改按鈕  ', projectId: 'p1', status: 'proposed' as const, opsNote: ' ', ownerId: '' };
+  const input = { name: '  改按鈕  ', projectId: 'p1', status: 'proposed' as const, opsNote: ' ' };
 
   it('名稱去空白，空白的欄位不存', () => {
     const created = newItem(input, 'Tessy', new Date('2026-10-07T03:00:00Z'));
     expect(created).toMatchObject({ name: '改按鈕', projectId: 'p1', status: 'proposed', createdBy: 'Tessy' });
     expect(created.opsNote).toBeUndefined();
-    expect(created.ownerId).toBeUndefined();
     expect(created.doneAt).toBeUndefined();
   });
 
@@ -120,20 +117,28 @@ describe('建立與修改', () => {
   });
 
   it('列上修改：空字串代表清掉，沒提到的欄位不動', () => {
-    const base = item('a', { opsPriority: 'P1', techLevel: 'L', ownerId: 'm1', dueDate: '2026-10-10' });
-    const next = patchItem(base, { opsPriority: '', ownerId: '' });
+    const base = item('a', { opsPriority: 'P1', techLevel: 'L', dueDate: '2026-10-10' });
+    const next = patchItem(base, { opsPriority: '', dueDate: '' });
     expect('opsPriority' in next).toBe(false);
-    expect('ownerId' in next).toBe(false);
+    expect('dueDate' in next).toBe(false);
     expect(next.techLevel).toBe('L');
-    expect(next.dueDate).toBe('2026-10-10');
     expect(patchItem(base, { techLevel: 'XL' }).techLevel).toBe('XL');
+  });
+
+  it('打勾完成：記下完成日；取消打勾退回測試中並清掉完成日', () => {
+    const base = item('a', { status: 'building' });
+    const done = completeItem(base, new Date('2026-10-09T03:00:00Z'));
+    expect(done).toMatchObject({ status: 'done', doneAt: '2026-10-09' });
+    const back = reopenItem(done);
+    expect(back.status).toBe('testing');
+    expect('doneAt' in back).toBe(false);
   });
 });
 
 describe('雲端資料列轉換', () => {
   it('寫出去的欄位明確帶 null，讀回來不認得的值被擋掉', () => {
     const fields = progressToFields(item('a', { opsPriority: 'P1' }));
-    expect(fields).toMatchObject({ opsPriority: 'P1', techLevel: null, ownerId: null, deletedAt: null, status: 'proposed' });
+    expect(fields).toMatchObject({ opsPriority: 'P1', techLevel: null, dueDate: null, deletedAt: null, status: 'proposed' });
 
     const row = {
       id: 'r1',
@@ -173,13 +178,8 @@ describe('本機資料庫', () => {
     expect(raw?.opsNote).toBeUndefined();
   });
 
-  it('預設有四個大項目；刪除大項目前檢查有沒有項目在用', async () => {
-    await ensureDefaultTaskOptions();
-    const { projects } = splitOptions(await taskOptionRepo.list());
+  it('大項目的清單在文字檔裡，預設四個', async () => {
+    const { projects } = await import('./progress');
     expect(projects.map((p) => p.name)).toEqual(['WebApp 細節修改', 'App', '網頁', 'AI']);
-    const app = projects[1];
-    await progressRepo.save(item('a', { projectId: app.id }));
-    expect(optionUsage([], app, await progressRepo.list())).toBe(1);
-    expect(optionUsage([], projects[0], await progressRepo.list())).toBe(0);
   });
 });
