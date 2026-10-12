@@ -9,6 +9,7 @@ const KIND_LABEL: Record<TaskOptionKind, string> = {
   member: '成員',
   priority: '優先級',
   status: '狀態',
+  project: '大項目',
 };
 
 /** 新增／修改一個選項（分類、成員、優先級、狀態）。呼叫端用 key 讓每次開啟都從乾淨的狀態開始。 */

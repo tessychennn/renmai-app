@@ -29,6 +29,20 @@ const TABS = [
       />
     ),
   },
+  {
+    to: '/progress',
+    label: '進度',
+    end: false,
+    icon: (
+      <path
+        d="M4 20V10M10 20V4M16 20v-7M22 20H2"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    ),
+  },
 ];
 
 /** 下方分頁列：毛玻璃固定在底部，預留 home indicator 的安全區域 */

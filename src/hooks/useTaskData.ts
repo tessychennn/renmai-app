@@ -4,7 +4,7 @@ import type { Task, TaskOption } from '../data/types';
 import { splitOptions, type SplitOptions } from '../lib/tasks';
 import { syncEvents } from '../sync/manager';
 
-const EMPTY: SplitOptions = { categories: [], members: [], priorities: [], statuses: [] };
+const EMPTY: SplitOptions = { categories: [], projects: [], members: [], priorities: [], statuses: [] };
 
 /** 載入待辦資料；另一支手機的變動同步進來時自動重新載入。改了資料後呼叫 reload。 */
 export function useTaskData(): {

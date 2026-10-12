@@ -78,19 +78,23 @@ export async function runSync(local: SyncLocal, remote: RemoteStore): Promise<Sy
     remoteGroups,
     remoteTasks,
     remoteOptions,
+    remoteProgress,
     localPersons,
     localGroups,
     localTasks,
     localOptions,
+    localProgress,
   ] = await Promise.all([
     remote.listPersons(),
     remote.listGroups(),
     remote.listTasks(),
     remote.listOptions(),
+    remote.listProgress(),
     local.listPersons(),
     local.listGroups(),
     local.listTasks(),
     local.listOptions(),
+    local.listProgress(),
   ]);
 
   const dirtyOf = (kind: EntityKind) => (id: string) => local.markDirty(kind, id);
@@ -106,6 +110,12 @@ export async function runSync(local: SyncLocal, remote: RemoteStore): Promise<Sy
     local: localTasks,
     apply: (t) => local.applyTask(t),
     markDirty: dirtyOf('task'),
+  });
+  result.pulled += await mergeEntities({
+    remote: remoteProgress,
+    local: localProgress,
+    apply: (i) => local.applyProgress(i),
+    markDirty: dirtyOf('item'),
   });
   result.pulled += await mergeEntities({
     remote: remoteOptions,
@@ -153,7 +163,9 @@ export async function runSync(local: SyncLocal, remote: RemoteStore): Promise<Sy
             ? await local.getGroup(entry.id)
             : entry.kind === 'task'
               ? await local.getTask(entry.id)
-              : await local.getOption(entry.id);
+              : entry.kind === 'item'
+                ? await local.getProgress(entry.id)
+                : await local.getOption(entry.id);
       if (!item) {
         await local.clearDirty(entry.key);
         continue;
@@ -161,6 +173,7 @@ export async function runSync(local: SyncLocal, remote: RemoteStore): Promise<Sy
       if (entry.kind === 'person') await remote.putPerson(item as Parameters<RemoteStore['putPerson']>[0]);
       else if (entry.kind === 'group') await remote.putGroup(item as Parameters<RemoteStore['putGroup']>[0]);
       else if (entry.kind === 'task') await remote.putTask(item as Parameters<RemoteStore['putTask']>[0]);
+      else if (entry.kind === 'item') await remote.putProgress(item as Parameters<RemoteStore['putProgress']>[0]);
       else await remote.putOption(item as Parameters<RemoteStore['putOption']>[0]);
       await local.clearDirty(entry.key, item.updatedAt);
       if (entry.kind === 'person') {

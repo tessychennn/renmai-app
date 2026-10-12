@@ -55,6 +55,28 @@ const schema = a.schema({
     })
     .authorization((allow) => [allow.authenticated()]),
 
+  // 進度追蹤（和技術長溝通的表格）：小項目掛在大項目底下（projectId 引用 kind = 'project' 的選項）。
+  // 營運優先級、技術等級、狀態都用字串存，值的範圍由 App 端把關（之後調整不用動後端）。
+  // 所有登入的人都能新增、修改、刪除。
+  ProgressItem: a
+    .model({
+      name: a.string().required(),
+      projectId: a.string().required(),
+      opsPriority: a.string(),
+      techLevel: a.string(),
+      status: a.string().required(),
+      ownerId: a.string(),
+      dueDate: a.string(),
+      opsNote: a.string(),
+      techNote: a.string(),
+      doneAt: a.string(),
+      createdBy: a.string(),
+      clientCreatedAt: a.string().required(),
+      clientUpdatedAt: a.string().required(),
+      deletedAt: a.string(),
+    })
+    .authorization((allow) => [allow.authenticated()]),
+
   // 待辦的選項清單：所有人可讀，只有 admin 群組能寫（伺服器強制執行）。
   TaskOption: a
     .model({

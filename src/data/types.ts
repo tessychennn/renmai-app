@@ -32,7 +32,7 @@ export interface Group {
 }
 
 /** 待辦的選項清單：分類、成員、優先級、狀態。任務用編號引用，改名不需要同步舊任務。 */
-export type TaskOptionKind = 'category' | 'member' | 'priority' | 'status';
+export type TaskOptionKind = 'category' | 'member' | 'priority' | 'status' | 'project';
 
 export interface TaskOption {
   id: string;
@@ -63,6 +63,51 @@ export interface Task {
   doneAt?: string;
   doneBy?: string;
   deletedAt?: string;
+}
+
+/** 進度追蹤：營運端的優先級（P0 最急）。只表示對營運有多重要，不含做起來難不難。 */
+export type OpsPriority = 'P0' | 'P1' | 'P2' | 'P3';
+/** 技術端自己估的等級（工作量）；R = 需要先研究，還估不出來 */
+export type TechLevel = 'S' | 'M' | 'L' | 'XL' | 'R';
+export type ProgressStatus =
+  | 'proposed'
+  | 'assessing'
+  | 'scheduled'
+  | 'building'
+  | 'testing'
+  | 'done'
+  | 'paused';
+
+/** 進度追蹤的一個小項目；大項目（projectId）是待辦選項裡 kind = 'project' 的那一種 */
+export interface ProgressItem {
+  id: string;
+  name: string;
+  projectId: string;
+  opsPriority?: OpsPriority;
+  techLevel?: TechLevel;
+  status: ProgressStatus;
+  ownerId?: string;
+  /** 目標日期 YYYY-MM-DD */
+  dueDate?: string;
+  /** 營運端的備註：為什麼需要、希望達到什麼 */
+  opsNote?: string;
+  /** 技術端的備註：做法、風險、卡在哪 */
+  techNote?: string;
+  /** 完成日 YYYY-MM-DD */
+  doneAt?: string;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string;
+}
+
+export interface ProgressRepo {
+  /** 未刪除的小項目（含已完成） */
+  list(): Promise<ProgressItem[]>;
+  get(id: string): Promise<ProgressItem | null>;
+  save(item: ProgressItem): Promise<void>;
+  saveMany(items: ProgressItem[]): Promise<void>;
+  remove(id: string): Promise<void>;
 }
 
 export interface TaskRepo {

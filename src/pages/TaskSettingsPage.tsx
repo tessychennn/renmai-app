@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import ConfirmSheet from '../components/ConfirmSheet';
 import GlassHeader, { HEADER_PAD } from '../components/GlassHeader';
 import OptionSheet from '../components/tasks/OptionSheet';
-import { taskOptionRepo, taskRepo } from '../data';
-import type { TaskOption, TaskOptionKind } from '../data/types';
+import { progressRepo, taskOptionRepo, taskRepo } from '../data';
+import type { ProgressItem, TaskOption, TaskOptionKind } from '../data/types';
 import { useRole } from '../hooks/useRole';
 import { useTaskData } from '../hooks/useTaskData';
 import { planLegacyImport } from '../lib/legacyImport';
@@ -12,6 +12,7 @@ import { optionUsage } from '../lib/tasks';
 
 const SECTIONS: { kind: TaskOptionKind; title: string; hint: string }[] = [
   { kind: 'category', title: '分類', hint: '待辦依分類分成一個個區塊。' },
+  { kind: 'project', title: '大項目', hint: '「進度」頁依大項目分成一個個區塊（例如 WebApp 細節修改、App、網頁、AI）。' },
   { kind: 'member', title: '成員', hint: '負責人的選項。填了登入信箱，才能辨識「是誰完成的」。' },
   { kind: 'priority', title: '優先級', hint: '第一個是最高（名稱標紅），最後一個是最低（淡灰）。' },
   { kind: 'status', title: '狀態', hint: '顏色依名稱固定：未開始灰、進行中綠、等回覆黃、需聯繫紅、聯繫中紫；其他名稱不上色。' },
@@ -28,6 +29,10 @@ export default function TaskSettingsPage() {
   const [editing, setEditing] = useState<{ kind: TaskOptionKind; option?: TaskOption } | null>(null);
   const [deleting, setDeleting] = useState<TaskOption | null>(null);
   const [inUse, setInUse] = useState<{ option: TaskOption; count: number } | null>(null);
+  const [progress, setProgress] = useState<ProgressItem[]>([]);
+  useEffect(() => {
+    void progressRepo.list().then(setProgress);
+  }, []);
   const [importText, setImportText] = useState('');
   const [importMessage, setImportMessage] = useState('');
   const [importing, setImporting] = useState(false);
@@ -35,6 +40,7 @@ export default function TaskSettingsPage() {
   const listOf = (kind: TaskOptionKind): TaskOption[] =>
     ({
       category: options.categories,
+      project: options.projects,
       member: options.members,
       priority: options.priorities,
       status: options.statuses,
@@ -84,7 +90,7 @@ export default function TaskSettingsPage() {
   };
 
   const askDelete = (option: TaskOption) => {
-    const count = optionUsage(tasks, option);
+    const count = optionUsage(tasks, option, progress);
     if (count > 0) setInUse({ option, count });
     else setDeleting(option);
   };

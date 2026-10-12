@@ -1,4 +1,4 @@
-import type { Task, TaskOption } from '../data/types';
+import type { ProgressItem, Task, TaskOption } from '../data/types';
 
 // ── 日期（一律用 YYYY-MM-DD 字串，不受時區影響） ──
 
@@ -40,6 +40,8 @@ export function dueLabel(dueDate: string, today: string): string {
 
 export interface SplitOptions {
   categories: TaskOption[];
+  /** 進度追蹤的大項目 */
+  projects: TaskOption[];
   members: TaskOption[];
   priorities: TaskOption[];
   statuses: TaskOption[];
@@ -50,6 +52,7 @@ export function splitOptions(options: TaskOption[]): SplitOptions {
     options.filter((o) => o.kind === kind && !o.deletedAt).sort((a, b) => a.order - b.order);
   return {
     categories: sorted('category'),
+    projects: sorted('project'),
     members: sorted('member'),
     priorities: sorted('priority'),
     statuses: sorted('status'),
@@ -75,8 +78,11 @@ export function priorityTone(priorities: TaskOption[], id: string | undefined): 
 /** 名稱叫「卡住」的狀態會特別標紅（沿用原本試算表的規則） */
 export const BLOCKED_STATUS_NAME = '卡住';
 
-/** 有多少未刪除的任務在使用這個選項（刪除前檢查用） */
-export function optionUsage(tasks: Task[], option: TaskOption): number {
+/** 有多少未刪除的任務（或進度項目）在使用這個選項（刪除前檢查用） */
+export function optionUsage(tasks: Task[], option: TaskOption, progress: ProgressItem[] = []): number {
+  if (option.kind === 'project') {
+    return progress.filter((i) => !i.deletedAt && i.projectId === option.id).length;
+  }
   const field = {
     category: 'categoryId',
     member: 'ownerId',

@@ -1,6 +1,6 @@
 // 狀態的顏色依名稱固定（選項本身沒有顏色欄位，這樣不用改後端）。
 // 名稱不在表裡的狀態（自訂的）維持中性的外框樣式。
-export type StatusColor = 'gray' | 'green' | 'yellow' | 'red' | 'purple';
+export type StatusColor = 'gray' | 'green' | 'yellow' | 'red' | 'purple' | 'blue';
 
 const COLOR_BY_NAME: Record<string, StatusColor> = {
   未開始: 'gray',
@@ -23,4 +23,5 @@ export const STATUS_BADGE: Record<StatusColor, string> = {
   yellow: 'border-transparent bg-status-yellow text-status-yellow-ink',
   red: 'border-transparent bg-status-red text-status-red-ink',
   purple: 'border-transparent bg-status-purple text-status-purple-ink',
+  blue: 'border-transparent bg-status-blue text-status-blue-ink',
 };

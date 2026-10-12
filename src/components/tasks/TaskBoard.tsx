@@ -6,9 +6,14 @@ import TaskTableRow, { TableHeader } from './TaskTableRow';
 // 分類的小圓點顏色：低飽和，沿用原本試算表分頁的色調。依分類在清單中的位置固定配色。
 const DOTS = ['#8FA3B5', '#9DB09A', '#C9A98C', '#B7A9BD', '#7FA5A1', '#B5B0A8', '#C79A94', '#A3A57F'];
 
-export function categoryDot(options: SplitOptions, categoryId: string): string {
-  const i = options.categories.findIndex((c) => c.id === categoryId);
+/** 選項在清單中的位置決定圓點顏色（分類、進度的大項目共用） */
+export function optionDot(list: { id: string }[], id: string): string {
+  const i = list.findIndex((o) => o.id === id);
   return i < 0 ? '#B5B0A8' : DOTS[i % DOTS.length];
+}
+
+export function categoryDot(options: SplitOptions, categoryId: string): string {
+  return optionDot(options.categories, categoryId);
 }
 
 /**

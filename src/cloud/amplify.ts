@@ -12,7 +12,7 @@ import {
 import { generateClient } from 'aws-amplify/data';
 import { downloadData, remove, uploadData } from 'aws-amplify/storage';
 import type { Schema } from '../../amplify/data/resource';
-import type { Group, Person, Task, TaskOption } from '../data/types';
+import type { Group, Person, ProgressItem, Task, TaskOption } from '../data/types';
 import { AuthRequiredError } from '../sync/errors';
 import type { RemoteStore } from '../sync/types';
 import { amplifyOutputs } from './config';
@@ -27,6 +27,7 @@ import {
   rowToTask,
   taskToFields,
 } from './mapping';
+import { progressToFields, rowToProgress } from './progressMapping';
 
 let configured = false;
 
@@ -157,6 +158,16 @@ function backendSupportsTasks(): boolean {
   const models = introspectedModels();
   return Boolean(models?.Task && models?.TaskOption);
 }
+
+/** 後端是否已有進度追蹤的資料表 */
+function backendSupportsProgress(): boolean {
+  return Boolean(introspectedModels()?.ProgressItem);
+}
+
+const PROGRESS_NOT_DEPLOYED =
+  `這支手機上的 App（版本 ${__APP_VERSION__}）用的連線設定還不含「進度追蹤」資料表。` +
+  '如果已經換過 amplify_outputs.json 並 push，請等部署完成後，把 App 完全關掉再開；' +
+  '還沒換的話請先下載新檔。手機上的資料都還在，更新後會自動同步。';
 
 const TASKS_NOT_DEPLOYED =
   `這支手機上的 App（版本 ${__APP_VERSION__}）用的連線設定還不含「待辦」資料表。` +
@@ -299,6 +310,38 @@ export function createRemoteStore(): RemoteStore {
         throw mapError(e);
       }
       return out;
+    },
+
+    async listProgress() {
+      if (!backendSupportsProgress()) return []; // 後端還沒有這張表：先當作沒資料，不要拖垮其他資料的同步
+      const out: ProgressItem[] = [];
+      let nextToken: string | null | undefined;
+      try {
+        do {
+          const res = await client.models.ProgressItem.list({ limit: 500, nextToken });
+          assertOk(res.errors);
+          out.push(...res.data.map(rowToProgress));
+          nextToken = res.nextToken;
+        } while (nextToken);
+      } catch (e) {
+        throw mapError(e);
+      }
+      return out;
+    },
+
+    async putProgress(i) {
+      if (!backendSupportsProgress()) throw new Error(PROGRESS_NOT_DEPLOYED);
+      const fields = progressToFields(i);
+      try {
+        const existing = await client.models.ProgressItem.get({ id: i.id });
+        assertOk(existing.errors);
+        const res = existing.data
+          ? await client.models.ProgressItem.update({ id: i.id, ...fields })
+          : await client.models.ProgressItem.create({ id: i.id, ...fields });
+        assertOk(res.errors);
+      } catch (e) {
+        throw mapError(e);
+      }
     },
 
     async putTask(t) {

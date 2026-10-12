@@ -1,6 +1,7 @@
 // 單一出口：UI 只從這裡拿 repo。未來換 Capacitor / Supabase 實作時只改這個檔案。
 import { IndexedDBPersonRepo } from './indexeddb/personRepo';
 import { IndexedDBPhotoRepo } from './indexeddb/photoRepo';
+import { IndexedDBProgressRepo } from './indexeddb/progressRepo';
 import { IndexedDBGroupRepo } from './indexeddb/groupRepo';
 import { IndexedDBSettingsRepo } from './indexeddb/settingsRepo';
 import { IndexedDBSyncLocal } from './indexeddb/syncLocal';
@@ -11,6 +12,7 @@ import type {
   GroupRepo,
   PersonRepo,
   PhotoRepo,
+  ProgressRepo,
   SettingsRepo,
   TaskOptionRepo,
   TaskRepo,
@@ -23,6 +25,7 @@ export const groupRepo: GroupRepo = new IndexedDBGroupRepo();
 export const settingsRepo: SettingsRepo = new IndexedDBSettingsRepo();
 export const taskRepo: TaskRepo = new IndexedDBTaskRepo();
 export const taskOptionRepo: TaskOptionRepo = new IndexedDBTaskOptionRepo();
+export const progressRepo: ProgressRepo = new IndexedDBProgressRepo();
 
 /** 同步引擎讀寫本機資料庫的入口（雲端同步啟用後才會用到） */
 export const syncLocal: SyncLocal = new IndexedDBSyncLocal();

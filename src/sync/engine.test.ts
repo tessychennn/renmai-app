@@ -7,12 +7,13 @@ import { closeDB, getDB } from '../data/indexeddb/db';
 import { IndexedDBGroupRepo } from '../data/indexeddb/groupRepo';
 import { IndexedDBPersonRepo } from '../data/indexeddb/personRepo';
 import { IndexedDBPhotoRepo, setPhotoTransport } from '../data/indexeddb/photoRepo';
+import { IndexedDBProgressRepo } from '../data/indexeddb/progressRepo';
 import { ensureDefaultGroups } from '../data/indexeddb/seedGroups';
 import { ensureDefaultTaskOptions } from '../data/indexeddb/seedTaskOptions';
 import { IndexedDBSyncLocal } from '../data/indexeddb/syncLocal';
 import { IndexedDBTaskOptionRepo } from '../data/indexeddb/taskOptionRepo';
 import { IndexedDBTaskRepo } from '../data/indexeddb/taskRepo';
-import type { Group, Person, Task, TaskOption } from '../data/types';
+import type { Group, Person, ProgressItem, Task, TaskOption } from '../data/types';
 import { runSync } from './engine';
 import type { RemoteStore } from './types';
 
@@ -39,6 +40,7 @@ class FakeRemote implements RemoteStore {
   groups = new Map<string, Group>();
   tasks = new Map<string, Task>();
   options = new Map<string, TaskOption>();
+  progress = new Map<string, ProgressItem>();
   /** 模擬「只有管理員能寫入選項」：true 時 putOption 會被拒絕 */
   rejectOptionWrites = false;
   photos = new Map<string, { full: Blob; thumb: Blob }>();
@@ -61,6 +63,14 @@ class FakeRemote implements RemoteStore {
   async listOptions() {
     if (this.failList) throw new TypeError('Failed to fetch');
     return [...this.options.values()].map((o) => structuredClone(o));
+  }
+  async listProgress() {
+    if (this.failList) throw new TypeError('Failed to fetch');
+    return [...this.progress.values()].map((i) => structuredClone(i));
+  }
+  async putProgress(i: ProgressItem) {
+    if (this.failPuts) throw new Error('network down');
+    this.progress.set(i.id, structuredClone(i));
   }
   async putTask(t: Task) {
     if (this.failPuts) throw new Error('network down');
@@ -97,6 +107,7 @@ const groupRepo = new IndexedDBGroupRepo();
 const photoRepo = new IndexedDBPhotoRepo();
 const taskRepo = new IndexedDBTaskRepo();
 const taskOptionRepo = new IndexedDBTaskOptionRepo();
+const progressRepo = new IndexedDBProgressRepo();
 const local = new IndexedDBSyncLocal();
 
 let remote: FakeRemote;
@@ -208,6 +219,39 @@ describe('雲端同步', () => {
     expect(down.errors).toHaveLength(1);
     expect(down.errors[0]).toContain('2 張照片下載失敗');
     expect(down.errors[0]).toContain('雲端找不到這張照片');
+  });
+
+  it('進度追蹤：A 新增的項目 B 看得到，B 改了營運優先級 A 也看得到，刪除也同步', async () => {
+    const item = (o: Partial<ProgressItem> = {}): ProgressItem => ({
+      id: 'i1',
+      name: '改登入頁',
+      projectId: 'opt-project-j0',
+      status: 'proposed',
+      createdAt: '2026-09-01T00:00:00.000Z',
+      updatedAt: '2026-09-01T00:00:00.000Z',
+      ...o,
+    });
+    await useDevice('A');
+    await progressRepo.save(item({ techNote: '要改 auth' }));
+    await syncNow();
+    expect(remote.progress.get('i1')?.name).toBe('改登入頁');
+
+    await useDevice('B');
+    await syncNow();
+    expect((await progressRepo.get('i1'))?.techNote).toBe('要改 auth');
+    await progressRepo.save(item({ opsPriority: 'P0', updatedAt: '2026-09-02T00:00:00.000Z' }));
+    await syncNow();
+
+    await useDevice('A');
+    await syncNow();
+    expect((await progressRepo.get('i1'))?.opsPriority).toBe('P0');
+
+    await progressRepo.remove('i1');
+    await syncNow();
+    await useDevice('B');
+    await syncNow();
+    expect(await progressRepo.get('i1')).toBeNull();
+    expect(remote.progress.get('i1')?.name).toBe(''); // 墓碑不留名稱
   });
 
   it('兩人同時編輯同一筆：updatedAt 較新的整筆勝出，兩邊最後一致', async () => {
