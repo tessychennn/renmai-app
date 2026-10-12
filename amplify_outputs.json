@@ -19,6 +19,16 @@
         "admin": {
           "precedence": 0
         }
+      },
+      {
+        "team": {
+          "precedence": 1
+        }
+      },
+      {
+        "tech": {
+          "precedence": 2
+        }
       }
     ],
     "mfa_configuration": "NONE",
@@ -180,7 +190,13 @@
               "properties": {
                 "rules": [
                   {
-                    "allow": "private",
+                    "groupClaim": "cognito:groups",
+                    "provider": "userPools",
+                    "allow": "groups",
+                    "groups": [
+                      "admin",
+                      "team"
+                    ],
                     "operations": [
                       "create",
                       "update",
@@ -272,7 +288,13 @@
               "properties": {
                 "rules": [
                   {
-                    "allow": "private",
+                    "groupClaim": "cognito:groups",
+                    "provider": "userPools",
+                    "allow": "groups",
+                    "groups": [
+                      "admin",
+                      "team"
+                    ],
                     "operations": [
                       "create",
                       "update",
@@ -427,7 +449,168 @@
               "properties": {
                 "rules": [
                   {
-                    "allow": "private",
+                    "groupClaim": "cognito:groups",
+                    "provider": "userPools",
+                    "allow": "groups",
+                    "groups": [
+                      "admin",
+                      "team"
+                    ],
+                    "operations": [
+                      "create",
+                      "update",
+                      "delete",
+                      "read"
+                    ]
+                  }
+                ]
+              }
+            }
+          ],
+          "primaryKeyInfo": {
+            "isCustomPrimaryKey": false,
+            "primaryKeyFieldName": "id",
+            "sortKeyFieldNames": []
+          }
+        },
+        "ProgressItem": {
+          "name": "ProgressItem",
+          "fields": {
+            "id": {
+              "name": "id",
+              "isArray": false,
+              "type": "ID",
+              "isRequired": true,
+              "attributes": []
+            },
+            "name": {
+              "name": "name",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            },
+            "projectId": {
+              "name": "projectId",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            },
+            "opsPriority": {
+              "name": "opsPriority",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            },
+            "techLevel": {
+              "name": "techLevel",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            },
+            "status": {
+              "name": "status",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            },
+            "dueDate": {
+              "name": "dueDate",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            },
+            "opsNote": {
+              "name": "opsNote",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            },
+            "techNote": {
+              "name": "techNote",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            },
+            "doneAt": {
+              "name": "doneAt",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            },
+            "createdBy": {
+              "name": "createdBy",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            },
+            "clientCreatedAt": {
+              "name": "clientCreatedAt",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            },
+            "clientUpdatedAt": {
+              "name": "clientUpdatedAt",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            },
+            "deletedAt": {
+              "name": "deletedAt",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            },
+            "createdAt": {
+              "name": "createdAt",
+              "isArray": false,
+              "type": "AWSDateTime",
+              "isRequired": false,
+              "attributes": [],
+              "isReadOnly": true
+            },
+            "updatedAt": {
+              "name": "updatedAt",
+              "isArray": false,
+              "type": "AWSDateTime",
+              "isRequired": false,
+              "attributes": [],
+              "isReadOnly": true
+            }
+          },
+          "syncable": true,
+          "pluralName": "ProgressItems",
+          "attributes": [
+            {
+              "type": "model",
+              "properties": {}
+            },
+            {
+              "type": "auth",
+              "properties": {
+                "rules": [
+                  {
+                    "groupClaim": "cognito:groups",
+                    "provider": "userPools",
+                    "allow": "groups",
+                    "groups": [
+                      "admin",
+                      "team",
+                      "tech"
+                    ],
                     "operations": [
                       "create",
                       "update",
@@ -540,9 +723,14 @@
                     ]
                   },
                   {
-                    "allow": "private",
+                    "groupClaim": "cognito:groups",
+                    "provider": "userPools",
+                    "allow": "groups",
                     "operations": [
                       "read"
+                    ],
+                    "groups": [
+                      "team"
                     ]
                   }
                 ]
@@ -577,6 +765,12 @@
               "delete"
             ],
             "groupsadmin": [
+              "get",
+              "list",
+              "write",
+              "delete"
+            ],
+            "groupsteam": [
               "get",
               "list",
               "write",
