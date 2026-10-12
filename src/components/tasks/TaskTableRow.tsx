@@ -1,6 +1,5 @@
 import type { Task } from '../../data/types';
 import {
-  BLOCKED_STATUS_NAME,
   dueLabel,
   dueState,
   optionName,
@@ -8,6 +7,7 @@ import {
   type InlinePatch,
   type SplitOptions,
 } from '../../lib/tasks';
+import { STATUS_BADGE, statusColor } from '../../lib/statusTone';
 import { InlineDate, InlineSelect } from './InlineFields';
 
 /** 一列的欄位：✓、項目、負責人、Deadline、狀態。標題列與每一列共用，欄位才對得整齊。 */
@@ -118,7 +118,8 @@ export default function TaskTableRow({
         value={task.statusId ?? ''}
         options={[{ value: '', label: '未設定' }, ...statuses.map((s) => ({ value: s.id, label: s.name }))]}
         text={statusName ?? '未設定'}
-        tone={statusName === BLOCKED_STATUS_NAME ? 'danger' : statusName ? 'normal' : 'faint'}
+        tone={statusName ? 'normal' : 'faint'}
+        badge={statusColor(statusName) && STATUS_BADGE[statusColor(statusName)!]}
         onChange={(statusId) => onPatch(task, { statusId })}
       />
     </li>

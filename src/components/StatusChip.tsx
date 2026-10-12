@@ -1,10 +1,10 @@
 import type { ChipTone } from '../lib/prospects';
+import { STATUS_BADGE } from '../lib/statusTone';
 
-// 色彩克制：只有需要處理的（需聯繫、卡住）用警示紅，其餘走黑白灰
+// 狀態用固定的顏色；完成與沒有狀態的（只是列入業務開發）維持黑白灰
 const STYLES: Record<ChipTone, string> = {
-  alert: 'border-danger/40 bg-white text-danger',
+  ...STATUS_BADGE,
   outline: 'border-ink/25 bg-white text-ink',
-  strong: 'border-ink bg-ink text-white',
   done: 'border-hairline bg-ground text-ink-2',
 };
 

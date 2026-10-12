@@ -1,6 +1,7 @@
 import { personRepo, syncLocal, taskOptionRepo, taskRepo } from '../data';
 import { personIdOfTask, prospectTaskId } from '../data/prospectId';
 import type { Person, Task, TaskOption } from '../data/types';
+import { type StatusColor, statusColor } from './statusTone';
 import { completeTask, optionName, splitOptions } from './tasks';
 
 // 人脈記錄裡「可合作」的人 ⇔ 業務開發裡的一筆待辦（任務編號 prospect-人物編號）。
@@ -78,16 +79,14 @@ export function prospectsByPerson(tasks: Task[]): Map<string, Task> {
   return map;
 }
 
-export type ChipTone = 'alert' | 'strong' | 'outline' | 'done';
+export type ChipTone = StatusColor | 'outline' | 'done';
 
 /** 人物卡上顯示的標籤：看待辦的狀態；沒有狀態就顯示「業務開發」 */
 export function prospectChip(task: Task, statuses: TaskOption[]): { label: string; tone: ChipTone } {
   if (task.done) return { label: '完成', tone: 'done' };
   const status = optionName(statuses, task.statusId);
   if (!status) return { label: '業務開發', tone: 'outline' };
-  if (status === '需聯繫' || status === '卡住') return { label: status, tone: 'alert' };
-  if (status === '已約時間') return { label: status, tone: 'strong' };
-  return { label: status, tone: 'outline' };
+  return { label: status, tone: statusColor(status) ?? 'outline' };
 }
 
 const LEGACY_STATUS_NAME = {

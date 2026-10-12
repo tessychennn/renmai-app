@@ -24,6 +24,7 @@ export function InlineSelect({
   options,
   text,
   tone = 'normal',
+  badge,
   onChange,
 }: {
   ariaLabel: string;
@@ -32,11 +33,13 @@ export function InlineSelect({
   /** 標籤上顯示的字（通常是目前選項的名稱） */
   text: string;
   tone?: InlineTone;
+  /** 有指定就用這組顏色（狀態標籤），取代 tone */
+  badge?: string;
   onChange: (value: string) => void;
 }) {
   return (
     <span
-      className={`relative flex h-7 min-w-0 items-center gap-0.5 rounded-lg border-[0.5px] px-1 text-xs @md:px-1.5 focus-within:outline focus-within:outline-2 focus-within:outline-ink ${TONES[tone]}`}
+      className={`relative flex h-7 min-w-0 items-center gap-0.5 rounded-lg border-[0.5px] px-1 text-xs @md:px-1.5 focus-within:outline focus-within:outline-2 focus-within:outline-ink ${badge ?? TONES[tone]}`}
     >
       <span className="min-w-0 flex-1 truncate">{text}</span>
       {/* 窄的時候省掉小箭頭，把空間留給文字；邊框本身就是「可以點」的提示 */}

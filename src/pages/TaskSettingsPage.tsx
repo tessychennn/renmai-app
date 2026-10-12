@@ -14,7 +14,7 @@ const SECTIONS: { kind: TaskOptionKind; title: string; hint: string }[] = [
   { kind: 'category', title: '分類', hint: '待辦依分類分成一個個區塊。' },
   { kind: 'member', title: '成員', hint: '負責人的選項。填了登入信箱，才能辨識「是誰完成的」。' },
   { kind: 'priority', title: '優先級', hint: '第一個是最高（名稱標紅），最後一個是最低（淡灰）。' },
-  { kind: 'status', title: '狀態', hint: '名稱叫「卡住」的狀態會標紅。' },
+  { kind: 'status', title: '狀態', hint: '顏色依名稱固定：未開始灰、進行中綠、等回覆黃、需聯繫紅、聯繫中紫；其他名稱不上色。' },
 ];
 
 const cardClass =

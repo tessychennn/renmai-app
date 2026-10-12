@@ -8,7 +8,7 @@ const legacy = {
   categories: ['業務開發', '新分類'],
   members: ['Tessy', 'Serina'],
   priorities: ['高', '中', '低'],
-  statuses: ['未開始', '卡住'],
+  statuses: ['未開始', '等回覆'],
   tasks: [
     {
       id: 'ab12cd34',
@@ -48,7 +48,7 @@ describe('匯入原試算表資料', () => {
     const plan = planLegacyImport(legacy, DEFAULT_TASK_OPTIONS, new Set(), NOW);
     const names = plan.newOptions.map((o) => `${o.kind}:${o.name}`);
     expect(names).toEqual(['category:新分類']);
-    // 「進行中」是預設狀態，「卡住」「未開始」也是 → 都沿用
+    // 「進行中」是預設狀態，「等回覆」「未開始」也是 → 都沿用
     const task = plan.newTasks.find((t) => t.name === '寄報價單')!;
     expect(task.categoryId).toBe('opt-category-c0');
     expect(task.ownerId).toBe('opt-member-m0');

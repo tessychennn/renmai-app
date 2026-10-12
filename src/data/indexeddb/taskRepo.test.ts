@@ -101,11 +101,9 @@ describe('預設選項', () => {
     expect((await options.list('status')).map((o) => o.name)).toEqual([
       '未開始',
       '進行中',
-      '卡住',
       '等回覆',
       '需聯繫',
       '聯繫中',
-      '已約時間',
     ]);
   });
 

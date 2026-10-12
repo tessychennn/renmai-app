@@ -1,6 +1,5 @@
 import type { Task } from '../../data/types';
 import {
-  BLOCKED_STATUS_NAME,
   dueLabel,
   dueState,
   optionName,
@@ -8,6 +7,7 @@ import {
   type DueState,
   type SplitOptions,
 } from '../../lib/tasks';
+import { STATUS_BADGE, statusColor } from '../../lib/statusTone';
 
 const DUE_STYLES: Record<DueState, string> = {
   overdue: 'bg-danger/10 text-danger',
@@ -36,7 +36,7 @@ export default function TaskRow({
   const status = optionName(options.statuses, task.statusId);
   const tone = priorityTone(options.priorities, task.priorityId);
   const state = task.done ? 'none' : dueState(task.dueDate, today);
-  const blocked = !task.done && status === BLOCKED_STATUS_NAME;
+  const color = statusColor(status);
 
   return (
     <li className="flex items-start gap-3 border-t-[0.5px] border-hairline px-3 py-2.5 first:border-t-0">
@@ -91,7 +91,7 @@ export default function TaskRow({
           {status && !task.done && (
             <span
               className={`${chip} border-[0.5px] ${
-                blocked ? 'border-danger/40 font-semibold text-danger' : 'border-hairline text-ink-2'
+                color ? STATUS_BADGE[color] : 'border-hairline text-ink-2'
               }`}
             >
               {status}

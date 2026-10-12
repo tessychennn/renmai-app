@@ -125,9 +125,15 @@ describe('人物卡上的標籤', () => {
     const statuses = splitOptions(await taskOptionRepo.list()).statuses;
     const idOf = (name: string) => statuses.find((s) => s.name === name)!.id;
     const base: Task = { id: 'prospect-p', name: 'x', categoryId: 'c', createdAt: 'a', updatedAt: 'a', done: false };
-    expect(prospectChip({ ...base, statusId: idOf('需聯繫') }, statuses)).toEqual({ label: '需聯繫', tone: 'alert' });
-    expect(prospectChip({ ...base, statusId: idOf('已約時間') }, statuses)).toEqual({ label: '已約時間', tone: 'strong' });
-    expect(prospectChip({ ...base, statusId: idOf('聯繫中') }, statuses)).toEqual({ label: '聯繫中', tone: 'outline' });
+    const tone = (name: string) => prospectChip({ ...base, statusId: idOf(name) }, statuses);
+    expect(tone('未開始')).toEqual({ label: '未開始', tone: 'gray' });
+    expect(tone('進行中')).toEqual({ label: '進行中', tone: 'green' });
+    expect(tone('等回覆')).toEqual({ label: '等回覆', tone: 'yellow' });
+    expect(tone('需聯繫')).toEqual({ label: '需聯繫', tone: 'red' });
+    expect(tone('聯繫中')).toEqual({ label: '聯繫中', tone: 'purple' });
+    // 不在表裡的（自訂或舊的）狀態維持中性外框
+    const custom = [{ id: 'x', kind: 'status' as const, name: '已約時間', order: 0, updatedAt: 'a' }];
+    expect(prospectChip({ ...base, statusId: 'x' }, custom)).toEqual({ label: '已約時間', tone: 'outline' });
     expect(prospectChip(base, statuses)).toEqual({ label: '業務開發', tone: 'outline' });
     expect(prospectChip({ ...base, done: true }, statuses)).toEqual({ label: '完成', tone: 'done' });
   });
