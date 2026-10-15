@@ -1,17 +1,17 @@
 import { setPhotoTransport, syncLocal } from '../data';
-import { cacheRole, cachedLimited } from '../lib/roles';
+import { cacheAccess, cachedAccess, FULL_ACCESS, syncScopeOf } from '../lib/roles';
 import { syncManager } from '../sync/manager';
 
 /** 登入完成後呼叫：接上雲端、開始同步。 */
 export async function startCloudSync(): Promise<void> {
   const cloud = await import('./amplify');
   const remote = cloud.createRemoteStore();
-  // 只屬於 tech 群組的帳號（技術端）只同步產品進度；讀不到群組（離線）就沿用上次確認的身分
+  // 依群組決定同步哪些資料（沒權限的資料伺服器會拒絕）；讀不到群組（離線）就沿用上次確認的身分
   const groups = await cloud.currentGroups();
-  const limited = groups ? cacheRole(groups).limited : cachedLimited();
+  const access = groups ? cacheAccess(groups) : (cachedAccess() ?? FULL_ACCESS);
   // 本機沒有的照片（另一支手機新增的）點開時才向雲端下載
   setPhotoTransport({ download: (id, variant) => remote.downloadPhoto(id, variant) });
-  syncManager.start(syncLocal, remote, limited ? 'progress' : 'all');
+  syncManager.start(syncLocal, remote, syncScopeOf(access));
 }
 
 export function stopCloudSync(): void {

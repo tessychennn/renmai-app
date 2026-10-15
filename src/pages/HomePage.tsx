@@ -7,17 +7,17 @@ import SyncDot from '../components/SyncDot';
 import TabBar from '../components/TabBar';
 import Toast from '../components/Toast';
 import { cloudEnabled } from '../cloud/config';
-import { groupRepo, personRepo, settingsRepo, taskOptionRepo, taskRepo } from '../data';
+import { clientRepo, groupRepo, personRepo, settingsRepo, taskOptionRepo } from '../data';
 import { isBackupStale } from '../lib/backup';
 import {
-  prospectChip,
-  prospectsByPerson,
-  removeProspect,
-  setProspect,
-  type ProspectChoice,
-} from '../lib/prospects';
+  clientChip,
+  clientsByPerson,
+  removeClient,
+  setClient,
+  type ClientChoice,
+} from '../lib/clients';
 import { syncEvents } from '../sync/manager';
-import type { Group, Person, PersonSort, Task, TaskOption } from '../data/types';
+import type { Client, Group, Person, PersonSort, TaskOption } from '../data/types';
 
 const SORT_OPTIONS: { value: PersonSort; label: string }[] = [
   { value: 'createdAt-desc', label: '最近加入' },
@@ -56,7 +56,7 @@ export default function HomePage() {
     return () => clearTimeout(timer);
   }, [toast]);
 
-  // 另一支手機的變動同步進來、或在這頁改了業務開發狀態後，重新載入列表
+  // 另一支手機的變動同步進來、或在這頁改了客戶狀態後，重新載入列表
   const [reloadTick, setReloadTick] = useState(0);
   useEffect(() => {
     const onSynced = () => setReloadTick((t) => t + 1);
@@ -75,37 +75,37 @@ export default function HomePage() {
       .then(setPersons);
   }, [search, selectedGroupIds, sortKey, reloadTick]);
 
-  // 業務開發：被標記為可合作的人，對應業務開發分類裡的一筆待辦
-  const [tasks, setTasks] = useState<Task[]>([]);
+  // 客戶：被標記為「聯絡中」的人，狀態標籤看客戶紀錄
+  const [clients, setClients] = useState<Client[]>([]);
   const [statuses, setStatuses] = useState<TaskOption[]>([]);
   useEffect(() => {
-    void Promise.all([taskRepo.list(), taskOptionRepo.list('status')]).then(([t, s]) => {
-      setTasks(t);
+    void Promise.all([clientRepo.list(), taskOptionRepo.list('status')]).then(([c, s]) => {
+      setClients(c);
       setStatuses(s);
     });
   }, [reloadTick]);
-  const prospects = prospectsByPerson(tasks);
+  const clientOf = clientsByPerson(clients);
 
-  // 長按人物卡：選一個狀態，把這個人列入業務開發
-  const [prospectTarget, setProspectTarget] = useState<Person | null>(null);
-  const applyProspect = async (person: Person, choice: ProspectChoice | null) => {
+  // 長按人物卡：選一個狀態，把這個人列入客戶
+  const [clientTarget, setClientTarget] = useState<Person | null>(null);
+  const applyClient = async (person: Person, choice: ClientChoice | null) => {
     try {
-      if (choice === null) await removeProspect(person.id);
-      else await setProspect(person, choice);
+      if (choice === null) await removeClient(person.id);
+      else await setClient(person, choice);
     } catch (e) {
       setToast(e instanceof Error ? e.message : '儲存失敗，請再試一次。');
       return;
     }
-    setProspectTarget(null);
+    setClientTarget(null);
     setReloadTick((t) => t + 1);
     const statusName = choice?.done ? '完成' : statuses.find((s) => s.id === choice?.statusId)?.name;
     setToast(
       choice === null
-        ? `已將 ${person.displayName} 移出業務開發`
-        : `${person.displayName}：${statusName ?? '已列入業務開發'}`
+        ? `已將 ${person.displayName} 移出客戶`
+        : `${person.displayName}：${statusName ?? '已列入客戶'}`
     );
   };
-  const targetTask = prospectTarget ? prospects.get(prospectTarget.id) : undefined;
+  const targetClient = clientTarget ? clientOf.get(clientTarget.id) : undefined;
 
   const changeSort = (value: PersonSort) => {
     setSortKey(value);
@@ -214,10 +214,8 @@ export default function HomePage() {
                 <PersonCard
                   person={person}
                   groups={groups}
-                  prospect={
-                    prospects.has(person.id) ? prospectChip(prospects.get(person.id)!, statuses) : undefined
-                  }
-                  onLongPress={setProspectTarget}
+                  client={clientOf.has(person.id) ? clientChip(clientOf.get(person.id)!, statuses) : undefined}
+                  onLongPress={setClientTarget}
                 />
               </li>
             ))}
@@ -239,26 +237,26 @@ export default function HomePage() {
       <TabBar />
 
       <ChoiceSheet
-        open={prospectTarget !== null}
-        title={prospectTarget ? `${prospectTarget.displayName} 的業務開發` : ''}
+        open={clientTarget !== null}
+        title={clientTarget ? `${clientTarget.displayName} 的客戶狀態` : ''}
         choices={[
           ...statuses.map((s) => ({
             label: s.name,
-            selected: Boolean(targetTask && !targetTask.done && targetTask.statusId === s.id),
-            onClick: () => prospectTarget && void applyProspect(prospectTarget, { statusId: s.id }),
+            selected: Boolean(targetClient && !targetClient.done && targetClient.statusId === s.id),
+            onClick: () => clientTarget && void applyClient(clientTarget, { statusId: s.id }),
           })),
           {
             label: '完成',
-            selected: Boolean(targetTask?.done),
-            onClick: () => prospectTarget && void applyProspect(prospectTarget, { done: true }),
+            selected: Boolean(targetClient?.done),
+            onClick: () => clientTarget && void applyClient(clientTarget, { done: true }),
           },
         ]}
         footer={
-          targetTask
-            ? { label: '移出業務開發', onClick: () => prospectTarget && void applyProspect(prospectTarget, null) }
+          targetClient
+            ? { label: '移出客戶', onClick: () => clientTarget && void applyClient(clientTarget, null) }
             : undefined
         }
-        onClose={() => setProspectTarget(null)}
+        onClose={() => setClientTarget(null)}
       />
 
       <Toast message={toast} />

@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import AccountMenu from '../cloud/AccountMenu';
 import { useRole } from '../hooks/useRole';
+import { PROGRESS_TEXT } from '../text/productProgress';
 
 const iconButton =
   'flex h-9 w-9 items-center justify-center rounded-full text-ink-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink';
@@ -43,27 +44,34 @@ function SlidersIcon() {
  * 主要分頁標題列右上角的按鈕組，順序固定：帳號（有雲端才顯示）、待辦設定（只有待辦頁）、設定。
  * 「設定」永遠在最右邊，所有主要分頁位置一致。
  */
-export default function HeaderActions({ taskSettings = false }: { taskSettings?: boolean }) {
-  const { limited } = useRole();
-  // 技術端只能用產品進度：沒有待辦設定與設定頁，只留帳號（可以登出）
-  if (limited) {
-    return (
-      <div className="flex items-center">
-        <AccountMenu />
-      </div>
-    );
-  }
+export default function HeaderActions({
+  taskSettings = false,
+  progressSettings = false,
+}: {
+  taskSettings?: boolean;
+  progressSettings?: boolean;
+}) {
+  const role = useRole();
   return (
     <div className="flex items-center">
       <AccountMenu />
-      {taskSettings && (
+      {/* 產品進度設定：只有管理員能改，所以只給管理員看到入口 */}
+      {progressSettings && role.admin && (
+        <Link to="/progress/settings" aria-label={PROGRESS_TEXT.settingsButtonLabel} className={iconButton}>
+          <SlidersIcon />
+        </Link>
+      )}
+      {taskSettings && role.todo && (
         <Link to="/tasks/settings" aria-label="待辦設定" className={iconButton}>
           <SlidersIcon />
         </Link>
       )}
-      <Link to="/settings" aria-label="設定" className={iconButton}>
-        <GearIcon />
-      </Link>
+      {/* 設定頁（備份、匯出入、人脈設定）只有能用人脈記錄的人才有 */}
+      {role.people && (
+        <Link to="/settings" aria-label="設定" className={iconButton}>
+          <GearIcon />
+        </Link>
+      )}
     </div>
   );
 }

@@ -1,5 +1,7 @@
+import { PROGRESS_OPTION_SEED_TIME } from '../data/defaultProgressOptions';
 import { OPTION_SEED_TIME } from '../data/defaultTaskOptions';
-import type { EntityKind, RemoteStore, SyncLocal, SyncResult, SyncScope } from './types';
+import { SCOPE_OF_KIND, type EntityKind, type RemoteStore, type SyncLocal, type SyncResult, type SyncScope } from './types';
+import { FULL_SYNC_SCOPE } from './types';
 
 // 同步策略（共用資料、資料量在數百到數千筆以內）：
 // - 每次同步先「全量拉取」再「上傳待上傳的變動」。全量拉取省掉游標與時鐘差的問題，
@@ -7,6 +9,7 @@ import type { EntityKind, RemoteStore, SyncLocal, SyncResult, SyncScope } from '
 // - 衝突以 updatedAt 較新者為準（整筆覆蓋）。
 // - 刪除是墓碑（deletedAt），另一支手機才知道要刪。
 // - 照片只會新增或刪除，不會被修改；先上傳照片再上傳人物，別人拉到人物時照片已在雲端。
+// - 同步範圍（SyncScope）依帳號的群組決定：沒有權限的資料伺服器會拒絕，引擎根本不去讀、不去寫。
 
 const DOWNLOAD_CONCURRENCY = 4;
 
@@ -67,9 +70,8 @@ const when = <T>(on: boolean, load: () => Promise<T[]>): Promise<T[]> => (on ? l
 export async function runSync(
   local: SyncLocal,
   remote: RemoteStore,
-  scope: SyncScope = 'all'
+  scope: SyncScope = FULL_SYNC_SCOPE
 ): Promise<SyncResult> {
-  const full = scope === 'all';
   const result: SyncResult = {
     pulled: 0,
     pushed: 0,
@@ -80,29 +82,39 @@ export async function runSync(
 
   if (!(await local.isInitialized(scope))) await local.initialize(scope);
 
+  const { people, todo, progress } = scope;
+
   // 1. 拉取：雲端這頭失敗就整個中止（什麼都還沒動）
   const [
     remotePersons,
     remoteGroups,
+    remoteClients,
     remoteTasks,
     remoteOptions,
     remoteProgress,
+    remoteProgressOptions,
     localPersons,
     localGroups,
+    localClients,
     localTasks,
     localOptions,
     localProgress,
+    localProgressOptions,
   ] = await Promise.all([
-    when(full, () => remote.listPersons()),
-    when(full, () => remote.listGroups()),
-    when(full, () => remote.listTasks()),
-    when(full, () => remote.listOptions()),
-    remote.listProgress(),
-    when(full, () => local.listPersons()),
-    when(full, () => local.listGroups()),
-    when(full, () => local.listTasks()),
-    when(full, () => local.listOptions()),
-    local.listProgress(),
+    when(people, () => remote.listPersons()),
+    when(people, () => remote.listGroups()),
+    when(people, () => remote.listClients()),
+    when(todo, () => remote.listTasks()),
+    when(todo, () => remote.listOptions()),
+    when(progress, () => remote.listProgress()),
+    when(progress, () => remote.listProgressOptions()),
+    when(people, () => local.listPersons()),
+    when(people, () => local.listGroups()),
+    when(people, () => local.listClients()),
+    when(todo, () => local.listTasks()),
+    when(todo, () => local.listOptions()),
+    when(progress, () => local.listProgress()),
+    when(progress, () => local.listProgressOptions()),
   ]);
 
   const dirtyOf = (kind: EntityKind) => (id: string) => local.markDirty(kind, id);
@@ -120,6 +132,12 @@ export async function runSync(
     markDirty: dirtyOf('task'),
   });
   result.pulled += await mergeEntities({
+    remote: remoteClients,
+    local: localClients,
+    apply: (c) => local.applyClient(c),
+    markDirty: dirtyOf('client'),
+  });
+  result.pulled += await mergeEntities({
     remote: remoteProgress,
     local: localProgress,
     apply: (i) => local.applyProgress(i),
@@ -134,6 +152,13 @@ export async function runSync(
     shouldRepush: (o) => o.updatedAt !== OPTION_SEED_TIME,
   });
   result.pulled += await mergeEntities({
+    remote: remoteProgressOptions,
+    local: localProgressOptions,
+    apply: (o) => local.applyProgressOption(o),
+    markDirty: dirtyOf('popt'),
+    shouldRepush: (o) => o.updatedAt !== PROGRESS_OPTION_SEED_TIME,
+  });
+  result.pulled += await mergeEntities({
     remote: remotePersons,
     local: localPersons,
     apply: (p) => local.applyPerson(p),
@@ -144,7 +169,7 @@ export async function runSync(
   });
 
   // 2. 上傳照片（先於人物，避免別人拉到人物卻抓不到照片）
-  for (const id of full ? await local.listPhotosToUpload() : []) {
+  for (const id of people ? await local.listPhotosToUpload() : []) {
     try {
       const blobs = await local.getPhotoForUpload(id);
       if (!blobs) continue;
@@ -158,7 +183,7 @@ export async function runSync(
 
   // 3. 上傳待上傳的變動；單筆失敗不擋其他筆，標記保留到下次重試
   for (const entry of await local.listDirty()) {
-    if (!full && entry.kind !== 'item') continue; // 其他資料這個帳號沒有權限，留著不動
+    if (!scope[SCOPE_OF_KIND[entry.kind]]) continue; // 這個帳號沒有權限的資料，留著不動
     try {
       if (entry.kind === 'photo') {
         await remote.deletePhotos([entry.id]);
@@ -172,9 +197,13 @@ export async function runSync(
             ? await local.getGroup(entry.id)
             : entry.kind === 'task'
               ? await local.getTask(entry.id)
-              : entry.kind === 'item'
-                ? await local.getProgress(entry.id)
-                : await local.getOption(entry.id);
+              : entry.kind === 'client'
+                ? await local.getClient(entry.id)
+                : entry.kind === 'item'
+                  ? await local.getProgress(entry.id)
+                  : entry.kind === 'popt'
+                    ? await local.getProgressOption(entry.id)
+                    : await local.getOption(entry.id);
       if (!item) {
         await local.clearDirty(entry.key);
         continue;
@@ -182,7 +211,10 @@ export async function runSync(
       if (entry.kind === 'person') await remote.putPerson(item as Parameters<RemoteStore['putPerson']>[0]);
       else if (entry.kind === 'group') await remote.putGroup(item as Parameters<RemoteStore['putGroup']>[0]);
       else if (entry.kind === 'task') await remote.putTask(item as Parameters<RemoteStore['putTask']>[0]);
+      else if (entry.kind === 'client') await remote.putClient(item as Parameters<RemoteStore['putClient']>[0]);
       else if (entry.kind === 'item') await remote.putProgress(item as Parameters<RemoteStore['putProgress']>[0]);
+      else if (entry.kind === 'popt')
+        await remote.putProgressOption(item as Parameters<RemoteStore['putProgressOption']>[0]);
       else await remote.putOption(item as Parameters<RemoteStore['putOption']>[0]);
       await local.clearDirty(entry.key, item.updatedAt);
       if (entry.kind === 'person') {
@@ -198,7 +230,7 @@ export async function runSync(
   }
 
   // 4. 補下載本機缺的縮圖（完整版等使用者點開才下載）
-  const persons = await when(full, () => local.listPersons());
+  const persons = await when(people, () => local.listPersons());
   const wanted = [...new Set(persons.filter((p) => !p.deletedAt).flatMap((p) => p.photoIds))];
   const missing = await local.missingThumbs(wanted);
   const downloadFailures: { id: string; message: string }[] = [];

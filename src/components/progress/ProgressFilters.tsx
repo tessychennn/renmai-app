@@ -1,5 +1,11 @@
-import { projects, SORT_LABEL, type ProgressFilter, type ProgressSort } from '../../lib/progress';
+import type { ProgressFilter, ProgressOptions, ProgressSort } from '../../lib/progress';
 import { PROGRESS_TEXT as T } from '../../text/productProgress';
+
+const SORT_LABEL: Record<ProgressSort, string> = {
+  ops: T.sortOps,
+  tech: T.sortTech,
+  due: T.sortDue,
+};
 
 const chip =
   'shrink-0 whitespace-nowrap rounded-full border-[0.5px] px-3 py-1.5 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink';
@@ -19,12 +25,14 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
 
 /** 大項目篩選與排序。onChange 只回報被改的那一項（patch），由呼叫端用「前一個狀態」合併。 */
 export default function ProgressFilters({
+  opts,
   filter,
   sort,
   showSort,
   onChange,
   onSort,
 }: {
+  opts: ProgressOptions;
   filter: ProgressFilter;
   sort: ProgressSort;
   showSort: boolean;
@@ -39,7 +47,7 @@ export default function ProgressFilters({
         <Chip active={!filter.projectId} onClick={() => onChange({ projectId: undefined })}>
           {T.allProjects}
         </Chip>
-        {projects.map((p) => (
+        {opts.projects.map((p) => (
           <Chip key={p.id} active={filter.projectId === p.id} onClick={() => toggleProject(p.id)}>
             {p.name}
           </Chip>

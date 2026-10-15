@@ -1,9 +1,9 @@
 import { type ClientSchema, a, defineData } from '@aws-amplify/backend';
 
 // 共用資料，依 Cognito 群組授權（群組說明見 auth/resource.ts）：
-//   人脈、分組、待辦：admin 與 team 能讀寫；tech（技術端）完全看不到
-//   待辦選項：admin 能寫，team 只能讀
-//   產品進度：admin、team、tech 都能讀寫
+//   人脈、分組、客戶：admin 與 team 能讀寫
+//   待辦：admin、team、todo 能讀寫；待辦選項只有 admin 能寫，team 與 todo 唯讀
+//   產品進度：admin、team、tech 能讀寫；產品進度選項只有 admin 能寫，team 與 tech 唯讀
 // Amplify 會自動加上 createdAt / updatedAt（伺服器時間），所以 App 自己的時間戳
 // 另存為 clientCreatedAt / clientUpdatedAt，同步比對新舊用的是後者。
 const schema = a.schema({
@@ -37,8 +37,24 @@ const schema = a.schema({
     })
     .authorization((allow) => [allow.groups(['admin', 'team'])]),
 
+  // 客戶：人脈記錄裡被標記為「聯絡中」的人。編號是 client-人物編號（每個人最多一筆），
+  // 名字直接讀人物資料。狀態、負責人用待辦選項的編號。
+  Client: a
+    .model({
+      personId: a.string().required(),
+      statusId: a.string(),
+      ownerId: a.string(),
+      dueDate: a.string(),
+      note: a.string(),
+      done: a.boolean().required(),
+      doneAt: a.string(),
+      clientCreatedAt: a.string().required(),
+      clientUpdatedAt: a.string().required(),
+      deletedAt: a.string(),
+    })
+    .authorization((allow) => [allow.groups(['admin', 'team'])]),
+
   // 待辦：任務用編號引用選項（分類、負責人、優先級、狀態），改名不用動任務。
-  // 所有登入的人都能新增、修改、完成、刪除任務。
   Task: a
     .model({
       name: a.string().required(),
@@ -56,10 +72,10 @@ const schema = a.schema({
       clientUpdatedAt: a.string().required(),
       deletedAt: a.string(),
     })
-    .authorization((allow) => [allow.groups(['admin', 'team'])]),
+    .authorization((allow) => [allow.groups(['admin', 'team', 'todo'])]),
 
-  // 產品進度（和技術長溝通的表格）：小項目掛在大項目底下（projectId 是 App 端文字檔裡的大項目編號）。
-  // 營運優先級、技術等級、狀態都用字串存，值的範圍由 App 端把關（之後調整不用動後端）。
+  // 產品進度（和技術長溝通的表格）：小項目掛在大項目底下。大項目、營運優先級、技術等級、狀態
+  // 都是 ProgressOption 的編號（用字串存），改名、新增不用動任務。
   ProgressItem: a
     .model({
       name: a.string().required(),
@@ -78,7 +94,7 @@ const schema = a.schema({
     })
     .authorization((allow) => [allow.groups(['admin', 'team', 'tech'])]),
 
-  // 待辦的選項清單：team 可讀，只有 admin 群組能寫（伺服器強制執行）。
+  // 待辦的選項清單：team 與 todo 可讀，只有 admin 群組能寫（伺服器強制執行）。
   TaskOption: a
     .model({
       kind: a.string().required(),
@@ -88,7 +104,22 @@ const schema = a.schema({
       clientUpdatedAt: a.string().required(),
       deletedAt: a.string(),
     })
-    .authorization((allow) => [allow.group('admin'), allow.groups(['team']).to(['read'])]),
+    .authorization((allow) => [allow.group('admin'), allow.groups(['team', 'todo']).to(['read'])]),
+
+  // 產品進度的選項（大項目、營運優先級、技術等級、狀態）：admin 能寫，team 與 tech 唯讀。
+  // 用字串存 kind、顏色，值的範圍由 App 端把關。
+  ProgressOption: a
+    .model({
+      kind: a.string().required(),
+      name: a.string().required(),
+      order: a.integer().required(),
+      color: a.string().required(),
+      hint: a.string(),
+      isDone: a.boolean(),
+      clientUpdatedAt: a.string().required(),
+      deletedAt: a.string(),
+    })
+    .authorization((allow) => [allow.group('admin'), allow.groups(['team', 'tech']).to(['read'])]),
 });
 
 export type Schema = ClientSchema<typeof schema>;

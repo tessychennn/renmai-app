@@ -1,22 +1,31 @@
-import { useCallback, useEffect, useState } from 'react';
-import { progressRepo } from '../data';
-import type { ProgressItem } from '../data/types';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { progressOptionRepo, progressRepo, taskOptionRepo } from '../data';
+import type { ProgressItem, ProgressOption, TaskOption } from '../data/types';
+import { EMPTY_PROGRESS_OPTIONS, splitProgressOptions, type ProgressOptions } from '../lib/progress';
 import { syncEvents } from '../sync/manager';
 
-/** 載入產品進度的項目；另一支手機的變動同步進來時自動重新載入。改了資料後呼叫 reload。 */
+/** 載入產品進度的項目與選項；另一支手機的變動同步進來時自動重新載入。改了資料後呼叫 reload。 */
 export function useProgressData(): {
   loading: boolean;
   items: ProgressItem[];
+  options: ProgressOptions;
+  allOptions: ProgressOption[];
+  /** 待辦的選項（成員等），客戶頁用 */
+  taskOptions: TaskOption[];
   reload: () => void;
 } {
-  const [items, setItems] = useState<ProgressItem[] | null>(null);
+  const [data, setData] = useState<{ items: ProgressItem[]; options: ProgressOption[]; taskOptions: TaskOption[] } | null>(
+    null
+  );
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
-    void progressRepo.list().then((list) => {
-      if (!cancelled) setItems(list);
-    });
+    void Promise.all([progressRepo.list(), progressOptionRepo.list(), taskOptionRepo.list()]).then(
+      ([items, options, taskOptions]) => {
+        if (!cancelled) setData({ items, options, taskOptions });
+      }
+    );
     return () => {
       cancelled = true;
     };
@@ -29,5 +38,13 @@ export function useProgressData(): {
   }, []);
 
   const reload = useCallback(() => setTick((t) => t + 1), []);
-  return { loading: items === null, items: items ?? [], reload };
+  const options = useMemo(() => (data ? splitProgressOptions(data.options) : EMPTY_PROGRESS_OPTIONS), [data]);
+  return {
+    loading: data === null,
+    items: data?.items ?? [],
+    options,
+    allOptions: data?.options ?? [],
+    taskOptions: data?.taskOptions ?? [],
+    reload,
+  };
 }

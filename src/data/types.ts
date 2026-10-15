@@ -65,27 +65,40 @@ export interface Task {
   deletedAt?: string;
 }
 
-/** 進度追蹤：營運端的優先級（P0 最急）。只表示對營運有多重要，不含做起來難不難。 */
-export type OpsPriority = 'P0' | 'P1' | 'P2' | 'P3';
-/** 技術端自己估的等級（工作量）；R = 需要先研究，還估不出來 */
-export type TechLevel = 'S' | 'M' | 'L' | 'XL' | 'R';
-export type ProgressStatus =
-  | 'proposed'
-  | 'assessing'
-  | 'scheduled'
-  | 'building'
-  | 'testing'
-  | 'done'
-  | 'paused';
+/**
+ * 產品進度的選項（大項目、營運優先級、技術等級、狀態），管理員在「產品進度設定」新增、改名、排序、上色。
+ * 項目用選項的編號引用，改名不用同步舊項目。預設選項的編號沿用最初的代碼（P0、S、proposed…），
+ * 所以改成可編輯之前建立的項目不用轉換。
+ */
+export type ProgressOptionKind = 'project' | 'priority' | 'tech' | 'status';
 
-/** 產品進度的一個小項目；大項目（projectId）的清單在 src/text/productProgress.ts */
+export interface ProgressOption {
+  id: string;
+  kind: ProgressOptionKind;
+  name: string;
+  order: number;
+  /** 標籤顏色：gray、green、yellow、red、purple、blue */
+  color: string;
+  /** 下拉選單裡的說明（選填） */
+  hint?: string;
+  /** 狀態專用：代表「完成」。打勾完成與完成頁籤都看這個。 */
+  isDone?: boolean;
+  updatedAt: string;
+  deletedAt?: string;
+}
+
+/** 產品進度的一個小項目；各個欄位都是上面選項的編號 */
 export interface ProgressItem {
   id: string;
   name: string;
+  /** 大項目 */
   projectId: string;
-  opsPriority?: OpsPriority;
-  techLevel?: TechLevel;
-  status: ProgressStatus;
+  /** 營運優先級（營運端決定，只表示對營運多重要） */
+  opsPriority?: string;
+  /** 技術等級（技術端自己估的工作量） */
+  techLevel?: string;
+  /** 狀態 */
+  status: string;
   /** 目標日期 YYYY-MM-DD */
   dueDate?: string;
   /** 營運端的備註：為什麼需要、希望達到什麼 */
@@ -98,6 +111,45 @@ export interface ProgressItem {
   createdAt: string;
   updatedAt: string;
   deletedAt?: string;
+}
+
+export interface ProgressOptionRepo {
+  /** 未刪除的選項，依 order 排序；不帶 kind 就是全部 */
+  list(kind?: ProgressOptionKind): Promise<ProgressOption[]>;
+  save(option: ProgressOption): Promise<void>;
+  saveMany(options: ProgressOption[]): Promise<void>;
+  remove(id: string): Promise<void>;
+}
+
+/**
+ * 客戶：人脈記錄裡被標記為「聯絡中」的人。每個人最多一筆，編號由人物編號固定推出（client-人物編號），
+ * 兩支手機各自建立也是同一筆。名字不另存，直接讀人物資料，改名不會對不上。
+ */
+export interface Client {
+  id: string;
+  personId: string;
+  /** 狀態：待辦選項裡 kind = 'status' 的那一種 */
+  statusId?: string;
+  /** 負責人：待辦選項裡 kind = 'member' 的那一種 */
+  ownerId?: string;
+  /** 下次聯絡 YYYY-MM-DD */
+  dueDate?: string;
+  note?: string;
+  done: boolean;
+  /** YYYY-MM-DD */
+  doneAt?: string;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string;
+}
+
+export interface ClientRepo {
+  /** 未刪除的客戶（含已完成） */
+  list(): Promise<Client[]>;
+  get(id: string): Promise<Client | null>;
+  save(client: Client): Promise<void>;
+  saveMany(clients: Client[]): Promise<void>;
+  remove(id: string): Promise<void>;
 }
 
 export interface ProgressRepo {

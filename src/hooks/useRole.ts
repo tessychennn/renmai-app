@@ -1,26 +1,25 @@
 import { useEffect, useState } from 'react';
 import { cloudEnabled } from '../cloud/config';
-import { cacheRole, cachedAdmin, cachedLimited } from '../lib/roles';
+import { cacheAccess, cachedAccess, FULL_ACCESS, type Access } from '../lib/roles';
 
-export interface Role {
-  /** 管理員可以修改待辦的選項設定。沒有啟用雲端時就是自己一個人用，視為管理員。 */
+export interface Role extends Access {
+  /** 管理員可以修改各種選項設定。沒有啟用雲端時就是自己一個人用，視為管理員。 */
   isAdmin: boolean;
-  /** 只能用產品進度的人（技術端）：畫面上只留產品進度。真正的限制在伺服器端。 */
-  limited: boolean;
   /** 登入的信箱（沒有雲端或讀不到時是 undefined） */
   email?: string;
 }
 
+const toRole = (access: Access, email?: string): Role => ({ ...access, isAdmin: access.admin, email });
+
 /**
- * 目前登入者的身分，取自 Cognito 的群組（admin、team、tech）。
+ * 目前登入者的身分，取自 Cognito 的群組（admin、team、tech、todo）。
  * 離線或讀不到時沿用上次已知的結果。真正的權限由 AWS 伺服器強制執行，
- * 這裡只是決定畫面上要不要顯示那些頁面與按鈕。
+ * 這裡只是決定畫面上要顯示哪些頁面與按鈕。
  */
 export function useRole(): Role {
-  const [role, setRole] = useState<Role>(() => ({
-    isAdmin: cloudEnabled ? cachedAdmin() : true,
-    limited: cloudEnabled ? cachedLimited() : false,
-  }));
+  const [role, setRole] = useState<Role>(() =>
+    toRole(cloudEnabled ? (cachedAccess() ?? FULL_ACCESS) : FULL_ACCESS)
+  );
 
   useEffect(() => {
     if (!cloudEnabled) return;
@@ -34,7 +33,7 @@ export function useRole(): Role {
           setRole((r) => ({ ...r, email }));
           return;
         }
-        setRole({ ...cacheRole(groups), email });
+        setRole(toRole(cacheAccess(groups), email));
       } catch {
         // 讀不到身分就沿用快取
       }

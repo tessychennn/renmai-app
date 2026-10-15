@@ -1,5 +1,6 @@
 import { cloudEnabled } from '../cloud/config';
 import { DEFAULT_TASK_OPTIONS } from '../data/defaultTaskOptions';
+import { cachedAccess } from './roles';
 import { taskOptionRepo, taskRepo } from '../data';
 
 const DONE_KEY = 'renmai.prunedStatuses.v1';
@@ -17,11 +18,7 @@ function flag(value?: string): string | null {
 
 function isAdminDevice(): boolean {
   if (!cloudEnabled) return true;
-  try {
-    return localStorage.getItem('renmai.isAdmin') === '1';
-  } catch {
-    return false;
-  }
+  return cachedAccess()?.admin === true;
 }
 
 /**

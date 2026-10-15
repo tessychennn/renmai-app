@@ -1,5 +1,5 @@
 import type { ProgressItem } from '../../data/types';
-import { groupByProject, projects, type ProgressPatch } from '../../lib/progress';
+import { groupByProject, type ProgressOptions, type ProgressPatch } from '../../lib/progress';
 import { PROGRESS_TEXT as T } from '../../text/productProgress';
 import { optionDot } from '../tasks/TaskBoard';
 import ProgressRow, { ProgressHeader } from './ProgressRow';
@@ -10,6 +10,7 @@ import ProgressRow, { ProgressHeader } from './ProgressRow';
  */
 export default function ProgressBoard({
   items,
+  opts,
   today,
   emptyText,
   onToggle,
@@ -17,13 +18,14 @@ export default function ProgressBoard({
   onPatch,
 }: {
   items: ProgressItem[];
+  opts: ProgressOptions;
   today: string;
   emptyText: string;
   onToggle: (item: ProgressItem) => void;
   onOpen: (item: ProgressItem) => void;
   onPatch: (item: ProgressItem, patch: ProgressPatch) => void;
 }) {
-  const groups = groupByProject(items);
+  const groups = groupByProject(items, opts.projects);
   if (groups.length === 0) {
     return <p className="mt-24 text-center text-ink-2">{emptyText}</p>;
   }
@@ -39,7 +41,7 @@ export default function ProgressBoard({
             <span
               aria-hidden="true"
               className="h-2.5 w-2.5 rounded-full"
-              style={{ background: g.project ? optionDot([...projects], g.project.id) : '#B5B0A8' }}
+              style={{ background: g.project ? optionDot(opts.projects, g.project.id) : '#B5B0A8' }}
             />
             {g.project?.name ?? T.orphanProject}
             <span className="font-normal text-ink-2">{g.items.length}</span>
@@ -47,7 +49,15 @@ export default function ProgressBoard({
           <ProgressHeader />
           <ul>
             {g.items.map((i) => (
-              <ProgressRow key={i.id} item={i} today={today} onToggle={onToggle} onOpen={onOpen} onPatch={onPatch} />
+              <ProgressRow
+                key={i.id}
+                item={i}
+                opts={opts}
+                today={today}
+                onToggle={onToggle}
+                onOpen={onOpen}
+                onPatch={onPatch}
+              />
             ))}
           </ul>
         </section>

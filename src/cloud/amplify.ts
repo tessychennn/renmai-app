@@ -12,7 +12,7 @@ import {
 import { generateClient } from 'aws-amplify/data';
 import { downloadData, remove, uploadData } from 'aws-amplify/storage';
 import type { Schema } from '../../amplify/data/resource';
-import type { Group, Person, ProgressItem, Task, TaskOption } from '../data/types';
+import type { Client, Group, Person, ProgressItem, ProgressOption, Task, TaskOption } from '../data/types';
 import { AuthRequiredError } from '../sync/errors';
 import type { RemoteStore } from '../sync/types';
 import { amplifyOutputs } from './config';
@@ -27,7 +27,14 @@ import {
   rowToTask,
   taskToFields,
 } from './mapping';
-import { progressToFields, rowToProgress } from './progressMapping';
+import {
+  clientToFields,
+  progressOptionToFields,
+  progressToFields,
+  rowToClient,
+  rowToProgress,
+  rowToProgressOption,
+} from './progressMapping';
 
 let configured = false;
 
@@ -159,15 +166,24 @@ function backendSupportsTasks(): boolean {
   return Boolean(models?.Task && models?.TaskOption);
 }
 
-/** 後端是否已有進度追蹤的資料表 */
+/** 後端是否已有產品進度（項目與選項）的資料表 */
 function backendSupportsProgress(): boolean {
-  return Boolean(introspectedModels()?.ProgressItem);
+  const models = introspectedModels();
+  return Boolean(models?.ProgressItem && models?.ProgressOption);
 }
 
-const PROGRESS_NOT_DEPLOYED =
-  `這支手機上的 App（版本 ${__APP_VERSION__}）用的連線設定還不含「進度追蹤」資料表。` +
+/** 後端是否已有客戶的資料表 */
+function backendSupportsClients(): boolean {
+  return Boolean(introspectedModels()?.Client);
+}
+
+const notDeployed = (what: string) =>
+  `這支手機上的 App（版本 ${__APP_VERSION__}）用的連線設定還不含「${what}」資料表。` +
   '如果已經換過 amplify_outputs.json 並 push，請等部署完成後，把 App 完全關掉再開；' +
   '還沒換的話請先下載新檔。手機上的資料都還在，更新後會自動同步。';
+
+const PROGRESS_NOT_DEPLOYED = notDeployed('產品進度');
+const CLIENTS_NOT_DEPLOYED = notDeployed('客戶');
 
 const TASKS_NOT_DEPLOYED =
   `這支手機上的 App（版本 ${__APP_VERSION__}）用的連線設定還不含「待辦」資料表。` +
@@ -327,6 +343,77 @@ export function createRemoteStore(): RemoteStore {
         throw mapError(e);
       }
       return out;
+    },
+
+    async listProgressOptions() {
+      if (!backendSupportsProgress()) return [];
+      const out: ProgressOption[] = [];
+      let nextToken: string | null | undefined;
+      try {
+        do {
+          const res = await client.models.ProgressOption.list({ limit: 500, nextToken });
+          assertOk(res.errors);
+          for (const row of res.data) {
+            const option = rowToProgressOption(row);
+            if (option) out.push(option);
+          }
+          nextToken = res.nextToken;
+        } while (nextToken);
+      } catch (e) {
+        throw mapError(e);
+      }
+      return out;
+    },
+
+    async putProgressOption(o) {
+      if (!backendSupportsProgress()) throw new Error(PROGRESS_NOT_DEPLOYED);
+      const fields = progressOptionToFields(o);
+      try {
+        const existing = await client.models.ProgressOption.get({ id: o.id });
+        assertOk(existing.errors);
+        const res = existing.data
+          ? await client.models.ProgressOption.update({ id: o.id, ...fields })
+          : await client.models.ProgressOption.create({ id: o.id, ...fields });
+        assertOk(res.errors);
+      } catch (e) {
+        // 非管理員寫入選項會被伺服器拒絕：給一句人看得懂的話
+        if (/unauthorized|not authorized/i.test(String((e as Error)?.message))) {
+          throw new Error('只有管理員可以修改產品進度的設定（大項目、優先級、技術等級、狀態）。');
+        }
+        throw mapError(e);
+      }
+    },
+
+    async listClients() {
+      if (!backendSupportsClients()) return [];
+      const out: Client[] = [];
+      let nextToken: string | null | undefined;
+      try {
+        do {
+          const res = await client.models.Client.list({ limit: 500, nextToken });
+          assertOk(res.errors);
+          out.push(...res.data.map(rowToClient));
+          nextToken = res.nextToken;
+        } while (nextToken);
+      } catch (e) {
+        throw mapError(e);
+      }
+      return out;
+    },
+
+    async putClient(c) {
+      if (!backendSupportsClients()) throw new Error(CLIENTS_NOT_DEPLOYED);
+      const fields = clientToFields(c);
+      try {
+        const existing = await client.models.Client.get({ id: c.id });
+        assertOk(existing.errors);
+        const res = existing.data
+          ? await client.models.Client.update({ id: c.id, ...fields })
+          : await client.models.Client.create({ id: c.id, ...fields });
+        assertOk(res.errors);
+      } catch (e) {
+        throw mapError(e);
+      }
     },
 
     async putProgress(i) {

@@ -7,12 +7,12 @@ import {
   groupRepo,
   personRepo,
   taskOptionRepo,
-  taskRepo,
+  clientRepo,
 } from '../data';
-import { prospectTaskId } from '../data/prospectId';
+import { clientIdOf } from '../data/clientId';
 import { usePhotoURL } from '../hooks/usePhotoURL';
 import { optionName } from '../lib/tasks';
-import type { Group, Person, Task, TaskOption } from '../data/types';
+import type { Client, Group, Person, TaskOption } from '../data/types';
 
 function PhotoSlide({ photoId }: { photoId: string }) {
   const url = usePhotoURL(photoId, 'full');
@@ -40,8 +40,8 @@ export default function PersonDetailPage() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-  // 業務開發裡對應的待辦（狀態、負責人、備註都在那裡管理）
-  const [prospect, setProspect] = useState<Task | null>(null);
+  // 客戶紀錄（狀態、負責人、備註都在「客戶」頁管理）
+  const [client, setClient] = useState<Client | null>(null);
   const [statuses, setStatuses] = useState<TaskOption[]>([]);
   const [members, setMembers] = useState<TaskOption[]>([]);
 
@@ -49,7 +49,7 @@ export default function PersonDetailPage() {
     if (!id) return;
     void personRepo.get(id).then(setPerson);
     void groupRepo.list().then(setGroups);
-    void taskRepo.get(prospectTaskId(id)).then(setProspect);
+    void clientRepo.get(clientIdOf(id)).then(setClient);
     void taskOptionRepo.list('status').then(setStatuses);
     void taskOptionRepo.list('member').then(setMembers);
   }, [id]);
@@ -80,15 +80,15 @@ export default function PersonDetailPage() {
   if (person.occasion) rows.push({ label: '場合', value: person.occasion });
   if (person.metDate) rows.push({ label: '認識日期', value: formatDate(person.metDate) });
   if (person.lineName) rows.push({ label: '聯絡帳號', value: person.lineName });
-  if (prospect) {
+  if (client) {
     rows.push({
-      label: '業務開發',
-      value: prospect.done ? '完成' : (optionName(statuses, prospect.statusId) ?? '已列入'),
+      label: '客戶',
+      value: client.done ? '完成' : (optionName(statuses, client.statusId) ?? '已列入'),
     });
-    const owner = optionName(members, prospect.ownerId);
+    const owner = optionName(members, client.ownerId);
     if (owner) rows.push({ label: '負責人', value: owner });
-    if (prospect.dueDate) rows.push({ label: 'Deadline', value: formatDate(prospect.dueDate) });
-    if (prospect.note) rows.push({ label: '合作備註', value: prospect.note });
+    if (client.dueDate) rows.push({ label: '下次聯絡', value: formatDate(client.dueDate) });
+    if (client.note) rows.push({ label: '客戶備註', value: client.note });
   }
 
   return (

@@ -5,17 +5,20 @@ import { deletePersonWithPhotos } from '../data';
 import { DEFAULT_TASK_OPTIONS } from '../data/defaultTaskOptions';
 import { closeDB, getDB } from '../data/indexeddb/db';
 import { IndexedDBGroupRepo } from '../data/indexeddb/groupRepo';
+import { IndexedDBClientRepo } from '../data/indexeddb/clientRepo';
 import { IndexedDBPersonRepo } from '../data/indexeddb/personRepo';
 import { IndexedDBPhotoRepo, setPhotoTransport } from '../data/indexeddb/photoRepo';
+import { IndexedDBProgressOptionRepo } from '../data/indexeddb/progressOptionRepo';
 import { IndexedDBProgressRepo } from '../data/indexeddb/progressRepo';
 import { ensureDefaultGroups } from '../data/indexeddb/seedGroups';
+import { ensureDefaultProgressOptions } from '../data/indexeddb/seedProgressOptions';
 import { ensureDefaultTaskOptions } from '../data/indexeddb/seedTaskOptions';
 import { IndexedDBSyncLocal } from '../data/indexeddb/syncLocal';
 import { IndexedDBTaskOptionRepo } from '../data/indexeddb/taskOptionRepo';
 import { IndexedDBTaskRepo } from '../data/indexeddb/taskRepo';
-import type { Group, Person, ProgressItem, Task, TaskOption } from '../data/types';
+import type { Client, Group, Person, ProgressItem, ProgressOption, Task, TaskOption } from '../data/types';
 import { runSync } from './engine';
-import type { RemoteStore } from './types';
+import { FULL_SYNC_SCOPE, type RemoteStore, type SyncScope } from './types';
 
 // canvas 在 Node 環境不存在；壓縮結果以「原內容＋標記」代替，方便辨認是哪一種尺寸
 vi.mock('../lib/image', () => ({
@@ -41,6 +44,10 @@ class FakeRemote implements RemoteStore {
   tasks = new Map<string, Task>();
   options = new Map<string, TaskOption>();
   progress = new Map<string, ProgressItem>();
+  progressOptions = new Map<string, ProgressOption>();
+  clients = new Map<string, Client>();
+  /** 模擬「只有管理員能寫入產品進度選項」 */
+  rejectProgressOptionWrites = false;
   /** 模擬「只有管理員能寫入選項」：true 時 putOption 會被拒絕 */
   rejectOptionWrites = false;
   photos = new Map<string, { full: Blob; thumb: Blob }>();
@@ -67,6 +74,23 @@ class FakeRemote implements RemoteStore {
   async listProgress() {
     if (this.failList) throw new TypeError('Failed to fetch');
     return [...this.progress.values()].map((i) => structuredClone(i));
+  }
+  async listClients() {
+    if (this.failList) throw new TypeError('Failed to fetch');
+    return [...this.clients.values()].map((c) => structuredClone(c));
+  }
+  async putClient(c: Client) {
+    if (this.failPuts) throw new Error('network down');
+    this.clients.set(c.id, structuredClone(c));
+  }
+  async listProgressOptions() {
+    if (this.failList) throw new TypeError('Failed to fetch');
+    return [...this.progressOptions.values()].map((o) => structuredClone(o));
+  }
+  async putProgressOption(o: ProgressOption) {
+    if (this.rejectProgressOptionWrites) throw new Error('只有管理員可以修改產品進度的設定');
+    if (this.failPuts) throw new Error('network down');
+    this.progressOptions.set(o.id, structuredClone(o));
   }
   async putProgress(i: ProgressItem) {
     if (this.failPuts) throw new Error('network down');
@@ -108,6 +132,8 @@ const photoRepo = new IndexedDBPhotoRepo();
 const taskRepo = new IndexedDBTaskRepo();
 const taskOptionRepo = new IndexedDBTaskOptionRepo();
 const progressRepo = new IndexedDBProgressRepo();
+const progressOptionRepo = new IndexedDBProgressOptionRepo();
+const clientRepo = new IndexedDBClientRepo();
 const local = new IndexedDBSyncLocal();
 
 let remote: FakeRemote;
@@ -254,6 +280,50 @@ describe('雲端同步', () => {
     expect(remote.progress.get('i1')?.name).toBe(''); // 墓碑不留名稱
   });
 
+  it('只同步產品進度與待辦的帳號（技術端加待辦）：不碰人脈與客戶，待辦與產品進度正常同步', async () => {
+    const scope: SyncScope = { people: false, todo: true, progress: true };
+    await useDevice('A');
+    await personRepo.save(person());
+    await clientRepo.save({
+      id: 'client-p1',
+      personId: 'p1',
+      done: false,
+      createdAt: '2026-09-01T00:00:00.000Z',
+      updatedAt: '2026-09-01T00:00:00.000Z',
+    });
+    await taskRepo.save(task({ id: 'k1' }));
+    const forbidden = async () => {
+      throw new Error('Unauthorized：這個帳號不能讀這張表');
+    };
+    remote.listPersons = forbidden;
+    remote.listGroups = forbidden;
+    remote.listClients = forbidden;
+    remote.putPerson = forbidden;
+    remote.putClient = forbidden;
+
+    const result = await runSync(local, remote, scope);
+    expect(result.errors).toEqual([]);
+    expect(remote.tasks.has('k1')).toBe(true);
+    expect((await local.listDirty()).map((d) => d.key).sort()).toEqual(['client:client-p1', 'person:p1']);
+  });
+
+  it('產品進度選項：管理員改的會同步；一般成員同步預設選項不會試圖上傳，也不會出錯', async () => {
+    await useDevice('A'); // 管理員
+    await ensureDefaultProgressOptions();
+    const [first] = await progressOptionRepo.list('priority');
+    await progressOptionRepo.save({ ...first, name: '最急', updatedAt: '2026-09-11T00:00:00.000Z' });
+    await syncNow();
+    expect([...remote.progressOptions.values()].map((o) => o.name)).toEqual(['最急']);
+
+    remote.rejectProgressOptionWrites = true; // 之後是非管理員：伺服器拒絕寫入
+    await useDevice('B');
+    await ensureDefaultProgressOptions();
+    const result = await syncNow();
+    expect(result.errors).toEqual([]);
+    expect((await progressOptionRepo.list('priority'))[0].name).toBe('最急'); // 看到管理員改的名稱
+    expect((await progressOptionRepo.list('status')).length).toBeGreaterThan(0);
+  });
+
   it('只同步產品進度的帳號（技術端）：不讀不寫其他資料，其他待上傳的資料留著不動', async () => {
     await useDevice('A');
     await personRepo.save(person());
@@ -272,15 +342,18 @@ describe('雲端同步', () => {
     remote.listGroups = forbidden;
     remote.listTasks = forbidden;
     remote.listOptions = forbidden;
+    remote.listClients = forbidden;
+    remote.listTasks = forbidden;
     remote.putPerson = forbidden;
 
-    const result = await runSync(local, remote, 'progress');
+    const onlyProgress: SyncScope = { people: false, todo: false, progress: true };
+    const result = await runSync(local, remote, onlyProgress);
     expect(result.errors).toEqual([]);
     expect(remote.progress.get('i1')?.name).toBe('改登入頁');
     expect((await local.listDirty()).map((d) => d.key)).toEqual(['person:p1']); // 人物沒被碰
 
     // 以後升級成團隊成員時，會用完整範圍重新初始化，人物才補上傳
-    expect(await local.isInitialized('all')).toBe(false);
+    expect(await local.isInitialized(FULL_SYNC_SCOPE)).toBe(false);
   });
 
   it('兩人同時編輯同一筆：updatedAt 較新的整筆勝出，兩邊最後一致', async () => {
@@ -529,30 +602,49 @@ describe('雲端同步', () => {
     expect((await taskOptionRepo.list()).length).toBe(DEFAULT_TASK_OPTIONS.length);
   });
 
-  it('兩支手機各自把同一個人列入業務開發，同步後仍然只有一筆', async () => {
+  it('兩支手機各自把同一個人列入客戶，同步後仍然只有一筆', async () => {
+    const mark = (statusId: string, updatedAt: string): Client => ({
+      id: 'client-p1', // 編號由人物編號固定推出，所以是同一筆
+      personId: 'p1',
+      statusId,
+      done: false,
+      createdAt: '2026-09-10T00:00:00.000Z',
+      updatedAt,
+    });
     await useDevice('A');
-    await ensureDefaultTaskOptions();
-    await taskRepo.save(task({ id: 'prospect-p1', name: '王小明', statusId: 'opt-status-s4' }));
+    await clientRepo.save(mark('opt-status-s4', '2026-09-10T00:00:00.000Z'));
     await syncNow();
 
     await useDevice('B');
-    await ensureDefaultTaskOptions();
-    // B 在還沒同步前也自己列入了同一個人（任務編號由人物編號固定推出，所以是同一筆）
-    await taskRepo.save(
-      task({
-        id: 'prospect-p1',
-        name: '王小明',
-        statusId: 'opt-status-s5',
-        updatedAt: '2026-09-12T00:00:00.000Z',
-      })
-    );
+    // B 在還沒同步前也自己列入了同一個人
+    await clientRepo.save(mark('opt-status-s5', '2026-09-12T00:00:00.000Z'));
     await syncNow();
     await useDevice('A');
     await syncNow();
 
-    expect(remote.tasks.size).toBe(1);
-    expect((await taskRepo.list()).filter((t) => t.id === 'prospect-p1').length).toBe(1);
-    expect((await taskRepo.get('prospect-p1'))?.statusId).toBe('opt-status-s5'); // 較新的勝出
+    expect(remote.clients.size).toBe(1);
+    expect((await clientRepo.list()).length).toBe(1);
+    expect((await clientRepo.get('client-p1'))?.statusId).toBe('opt-status-s5'); // 較新的勝出
+  });
+
+  it('移出客戶（墓碑）會同步，且不留備註', async () => {
+    await useDevice('A');
+    await clientRepo.save({
+      id: 'client-p1',
+      personId: 'p1',
+      note: '機密備註',
+      done: false,
+      createdAt: '2026-09-10T00:00:00.000Z',
+      updatedAt: '2026-09-10T00:00:00.000Z',
+    });
+    await syncNow();
+    await clientRepo.remove('client-p1');
+    await syncNow();
+    expect(remote.clients.get('client-p1')?.deletedAt).toBeTruthy();
+    expect(remote.clients.get('client-p1')?.note).toBeUndefined();
+    await useDevice('B');
+    await syncNow();
+    expect(await clientRepo.get('client-p1')).toBeNull();
   });
 
   it('管理員改選項名稱會同步，另一支手機（原本是預設值）看到新名稱', async () => {

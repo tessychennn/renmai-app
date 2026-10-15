@@ -1,5 +1,9 @@
 // ─────────────────────────────────────────────────────────────
-// 「產品進度」頁的所有文字都在這個檔案，想改字就改這裡。
+// 「產品進度」頁的文字都在這個檔案，想改字就改這裡。
+//
+// 注意：大項目、營運優先級、技術等級、狀態這四種「選項」，管理員現在直接在 App 裡的
+// 「產品進度設定」新增、改名、排序、上色。下面那四份清單只是「第一次啟動時的預設值」，
+// 之後改這裡不會影響已經建立好的選項。
 //
 // 怎麼改：
 //   1. 只改「引號裡面」的中文，其他符號（逗號、冒號、括號、大括號）不要動。
@@ -7,7 +11,7 @@
 //   3. 有 ${...} 的地方是會被換成實際內容的位置（例如項目名稱），整段 ${...} 要原樣保留，
 //      但前後的字可以改、可以調整順序。
 //
-// 注意：每個選項的「value」是存進資料庫的代號，**不要改**，只改 label（顯示的字）和 hint（說明）。
+// 注意：每個選項的「value」是存進資料庫的代號，**不要改**。
 // ─────────────────────────────────────────────────────────────
 
 import type { StatusColor } from '../lib/statusTone';
@@ -21,6 +25,8 @@ export interface Choice<T extends string> {
   hint: string;
   /** 標籤的顏色：gray 灰、green 綠、yellow 黃、red 紅、purple 紫、blue 藍 */
   color: StatusColor;
+  /** 狀態專用：代表「完成」 */
+  done?: boolean;
 }
 
 /** 營運優先級：營運端決定，只表示對營運有多重要 */
@@ -42,20 +48,16 @@ export const TECH_LEVEL_CHOICES = [
 
 /** 進度狀態（由前到後）。「完成」會自動記錄完成日並移到完成頁籤 */
 export const PROGRESS_STATUS_CHOICES = [
-  { value: 'proposed', label: '提出', hint: '營運剛提出，技術端還沒看', color: 'gray' },
-  { value: 'assessing', label: '評估中', hint: '技術端正在評估', color: 'purple' },
-  { value: 'scheduled', label: '排程中', hint: '評估完，排進開發', color: 'yellow' },
+  { value: 'proposed', label: '提出', hint: '營運剛提出', color: 'gray' },
+  { value: 'assessing', label: '評估中', hint: '技術端評估中', color: 'purple' },
+  { value: 'scheduled', label: '排程中', hint: '已安排開發！', color: 'yellow' },
   { value: 'building', label: '開發中', hint: '正在做', color: 'blue' },
-  { value: 'testing', label: '測試中', hint: '做好了，在測試', color: 'green' },
-  { value: 'done', label: '完成', hint: '已上線', color: 'gray' },
+  { value: 'testing', label: '測試中', hint: '做好了，測試中', color: 'green' },
+  { value: 'done', label: '完成', hint: '已上線', color: 'gray', done: true },
   { value: 'paused', label: '暫緩', hint: '先擱置', color: 'gray' },
 ] as const satisfies readonly Choice<string>[];
 
-/**
- * 大項目（頁面上的一個個區塊，依這裡的順序排列）。
- * 想新增大項目：照格式多加一行，id 取一個沒用過的英文代號（例如 'proj-5'）。
- * 想改名：只改 name。已經有項目掛在底下的大項目，**id 不要改**，否則那些項目會找不到大項目。
- */
+/** 大項目的預設清單（頁面上的一個個區塊） */
 export const PROJECTS = [
   { id: 'opt-project-j0', name: 'WebApp 細節修改' },
   { id: 'opt-project-j1', name: 'App' },
@@ -86,10 +88,9 @@ export const PROGRESS_TEXT = {
   colStatus: '狀態',
   colDue: '目標日',
 
-  /** 列表上方的摘要：進行中 3 項，待技術評估 1 項… */
+  /** 列表上方的摘要：進行中 3 項，待技術評估 1 項，（最高優先級的名稱）2 項… */
   summaryOpen: '進行中',
   summaryNeedsAssessment: '待技術評估',
-  summaryUrgent: 'P0 緊急',
   summaryOverdue: '逾期',
   summaryUnit: '項',
 
@@ -143,4 +144,41 @@ export const PROGRESS_TEXT = {
   ariaTech: (name: string) => `「${name}」的技術等級`,
   ariaStatus: (name: string) => `「${name}」的狀態`,
   ariaDue: (name: string) => `「${name}」的目標日期`,
+
+  /** 「產品進度設定」頁（只有管理員能修改） */
+  settingsButtonLabel: '產品進度設定',
+  settingsTitle: '產品進度設定',
+  settingsAdmin: '你是管理員，可以修改下面的設定。',
+  settingsReadOnly: '你不是管理員，只能查看設定。需要修改請找管理員。',
+  settingsEmpty: '還沒有選項。',
+  settingsAdd: (kind: string) => `＋ 新增${kind}`,
+  settingsEdit: (kind: string) => `修改${kind}`,
+  settingsNew: (kind: string) => `新增${kind}`,
+  settingsNameLabel: '名稱',
+  settingsHintLabel: '說明（選填）',
+  settingsHintPlaceholder: '顯示在下拉選單裡，例如「緊急：立刻處理」',
+  settingsColorLabel: '標籤顏色',
+  settingsDoneLabel: '代表「完成」',
+  settingsDoneHelp: '選了這個狀態的項目會移到完成頁籤，打勾完成也是改成這個狀態。',
+  settingsDuplicate: '已經有同名的選項了。',
+  settingsNeedDone: '至少要有一個代表「完成」的狀態，打勾完成才有地方去。',
+  settingsInUse: (name: string, count: number) =>
+    `「${name}」還有 ${count} 個項目在用，請先把那些項目改成別的選項，再刪除。`,
+  settingsConfirmDelete: (name: string) => `刪除「${name}」？`,
+  settingsConfirmDeleteBody: '刪除後無法復原。',
+  settingsMoveUp: '上移',
+  settingsMoveDown: '下移',
+  settingsMarkedDone: '（完成）',
+  settingsBack: '返回',
+  settingsSave: '儲存',
+  settingsCancel: '取消',
+  settingsDelete: '刪除',
+  settingsEditButton: '修改',
+  settingsErrorNoName: '請輸入名稱',
+
+  /** 設定頁四個區塊的標題與說明 */
+  sectionProject: { title: '大項目', hint: '頁面依大項目分成一個個區塊（例如 WebApp 細節修改、App、網頁、AI）。' },
+  sectionPriority: { title: '營運優先級', hint: '營運端決定。第一個是最高優先（列表頂端會統計它的數量）。' },
+  sectionTech: { title: '技術等級', hint: '技術端自己估的工作量。排在前面的算比較簡單。' },
+  sectionStatus: { title: '狀態', hint: '由前到後的進度。至少要有一個代表「完成」。' },
 } as const;

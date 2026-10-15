@@ -45,7 +45,7 @@ describe('資料庫 v1 → v2 升級', () => {
 
     const db = await getDB();
 
-    expect(db.version).toBe(4);
+    expect(db.version).toBe(5);
     expect(await db.get('persons', 'p1')).toEqual(person);
     expect((await db.get('photos', 'ph1'))?.width).toBe(100);
     expect(await db.get('settings', 'app')).toEqual({ currentOccasion: '2026 設計週' });
@@ -70,7 +70,7 @@ describe('資料庫 v1 → v2 升級', () => {
 
   it('全新安裝直接建立 v3 結構', async () => {
     const db = await getDB();
-    expect(db.version).toBe(4);
+    expect(db.version).toBe(5);
     expect([...db.objectStoreNames]).toEqual(
       expect.arrayContaining([
         'dirty',
@@ -103,7 +103,7 @@ describe('資料庫 v1 → v2 升級', () => {
 
     const db = await getDB();
 
-    expect(db.version).toBe(4);
+    expect(db.version).toBe(5);
     expect((await db.get('persons', 'p1'))?.displayName).toBe('王小明');
     expect(await db.get('dirty', 'person:p1')).toBeTruthy();
     expect(await db.get('syncMeta', 'cloudInitialized')).toBe(true);

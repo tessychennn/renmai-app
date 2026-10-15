@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import CropModal, { type CropResult } from '../components/CropModal';
 import GlassHeader, { HEADER_PAD } from '../components/GlassHeader';
-import { groupRepo, personRepo, photoRepo, settingsRepo, taskOptionRepo, taskRepo } from '../data';
-import { prospectTaskId } from '../data/prospectId';
+import { clientRepo, groupRepo, personRepo, photoRepo, settingsRepo, taskOptionRepo } from '../data';
+import { clientIdOf } from '../data/clientId';
 import { preloadScanner } from '../lib/documentScan';
-import { removeProspect, setProspect } from '../lib/prospects';
+import { removeClient, setClient } from '../lib/clients';
 import type { Group, Person, TaskOption } from '../data/types';
 
 const DONE_CHOICE = '__done__';
@@ -49,10 +49,10 @@ export default function PersonFormPage() {
   const [note, setNote] = useState('');
   const [lineName, setLineName] = useState('');
   const [showMore, setShowMore] = useState(false);
-  // 業務開發：'' = 不列入；DONE_CHOICE = 完成；其他 = 待辦狀態的編號
+  // 客戶：'' = 不列入；DONE_CHOICE = 完成；其他 = 狀態的編號
   const [taskStatuses, setTaskStatuses] = useState<TaskOption[]>([]);
-  const [prospectChoice, setProspectChoice] = useState('');
-  const [initialProspectChoice, setInitialProspectChoice] = useState('');
+  const [clientChoice, setClientChoice] = useState('');
+  const [initialClientChoice, setInitialClientChoice] = useState('');
   const [groups, setGroups] = useState<Group[]>([]);
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
   const [photos, setPhotos] = useState<StagedPhoto[]>([]);
@@ -72,10 +72,10 @@ export default function PersonFormPage() {
     void groupRepo.list().then(setGroups);
     void taskOptionRepo.list('status').then(setTaskStatuses);
     if (id) {
-      void taskRepo.get(prospectTaskId(id)).then((task) => {
-        const choice = !task ? '' : task.done ? DONE_CHOICE : (task.statusId ?? '');
-        setProspectChoice(choice);
-        setInitialProspectChoice(choice);
+      void clientRepo.get(clientIdOf(id)).then((client) => {
+        const choice = !client ? '' : client.done ? DONE_CHOICE : (client.statusId ?? '');
+        setClientChoice(choice);
+        setInitialClientChoice(choice);
       });
       void personRepo.get(id).then(async (person) => {
         if (!person) return;
@@ -223,7 +223,7 @@ export default function PersonFormPage() {
         occasion: occasion.trim() || undefined,
         metDate: metDate || undefined,
         note: note.trim() || undefined,
-        // 舊版「合作機會」存在人物上的欄位原樣保留（已搬成業務開發的待辦，之後不再使用）
+        // 舊版「合作機會」存在人物上的欄位原樣保留（已搬成客戶紀錄，之後不再使用）
         collabStatus: source?.collabStatus,
         collabOwner: source?.collabOwner,
         collabNote: source?.collabNote,
@@ -231,14 +231,10 @@ export default function PersonFormPage() {
         updatedAt: now,
       };
       await personRepo.save(person);
-      // 業務開發：依選擇建立／更新／移出對應的待辦
-      if (prospectChoice !== initialProspectChoice) {
-        if (prospectChoice === '') await removeProspect(person.id);
-        else
-          await setProspect(
-            person,
-            prospectChoice === DONE_CHOICE ? { done: true } : { statusId: prospectChoice }
-          );
+      // 客戶：依選擇建立／更新／移出對應的客戶紀錄
+      if (clientChoice !== initialClientChoice) {
+        if (clientChoice === '') await removeClient(person.id);
+        else await setClient(person, clientChoice === DONE_CHOICE ? { done: true } : { statusId: clientChoice });
       }
       // 這次用的場合自動成為「目前場合」，下一個人不用重打
       if (person.occasion) {
@@ -471,10 +467,10 @@ export default function PersonFormPage() {
         </section>
 
         <label className="block">
-          <span className="mb-1.5 block text-sm text-ink-2">業務開發</span>
+          <span className="mb-1.5 block text-sm text-ink-2">客戶</span>
           <select
-            value={prospectChoice}
-            onChange={(e) => setProspectChoice(e.target.value)}
+            value={clientChoice}
+            onChange={(e) => setClientChoice(e.target.value)}
             className={fieldClass}
           >
             <option value="">不列入</option>
@@ -486,7 +482,7 @@ export default function PersonFormPage() {
             <option value={DONE_CHOICE}>完成</option>
           </select>
           <span className="mt-1 block text-xs text-ink-2">
-            列入後會出現在「待辦」的業務開發分類，負責人、Deadline、備註到那裡設定。
+            列入後會出現在「客戶」頁，負責人、下次聯絡、備註到那裡設定。
           </span>
         </label>
 

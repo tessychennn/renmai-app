@@ -1,12 +1,6 @@
 import { useState } from 'react';
-import type { OpsPriority, ProgressItem, ProgressStatus, TechLevel } from '../../data/types';
-import {
-  OPS_PRIORITIES,
-  PROGRESS_STATUSES,
-  projects,
-  TECH_LEVELS,
-  type ProgressInput,
-} from '../../lib/progress';
+import type { ProgressItem, ProgressOption } from '../../data/types';
+import type { ProgressInput, ProgressOptions } from '../../lib/progress';
 import { PROGRESS_TEXT as T } from '../../text/productProgress';
 
 const fieldClass =
@@ -24,6 +18,13 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
   );
 }
 
+/** 選項清單；項目目前用的選項如果已被刪掉，保留成一個選項，避免儲存時默默改掉 */
+function withCurrent(list: ProgressOption[], currentId: string | undefined) {
+  const base = list.map((o) => ({ id: o.id, label: o.hint ? `${o.name}　${o.hint}` : o.name }));
+  if (currentId && !list.some((o) => o.id === currentId)) base.push({ id: currentId, label: T.deletedOption });
+  return base;
+}
+
 /**
  * 新增／編輯項目的面板（手機從底部滑出，電腦置中顯示）。
  * 營運備註與技術備註分開兩欄，兩邊各寫各的，不會互相蓋掉。
@@ -31,38 +32,35 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
  */
 export default function ProgressSheet({
   item,
+  opts,
   defaults,
   onSave,
   onDelete,
   onClose,
 }: {
   item?: ProgressItem;
+  opts: ProgressOptions;
   defaults?: { projectId?: string };
   onSave: (input: ProgressInput, keepAdding: boolean) => Promise<void>;
   onDelete?: () => void;
   onClose: () => void;
 }) {
   const editing = Boolean(item);
+  const firstStatus = (opts.statuses.find((s) => !s.isDone) ?? opts.statuses[0])?.id ?? '';
   const [name, setName] = useState(item?.name ?? '');
   const [projectId, setProjectId] = useState(
     item?.projectId ??
-      (projects.some((p) => p.id === defaults?.projectId) ? defaults!.projectId! : (projects[0]?.id ?? ''))
+      (opts.projects.some((p) => p.id === defaults?.projectId) ? defaults!.projectId! : (opts.projects[0]?.id ?? ''))
   );
-  const [opsPriority, setOpsPriority] = useState<OpsPriority | ''>(item?.opsPriority ?? '');
-  const [techLevel, setTechLevel] = useState<TechLevel | ''>(item?.techLevel ?? '');
-  const [status, setStatus] = useState<ProgressStatus>(item?.status ?? 'proposed');
+  const [opsPriority, setOpsPriority] = useState(item?.opsPriority ?? '');
+  const [techLevel, setTechLevel] = useState(item?.techLevel ?? '');
+  const [status, setStatus] = useState(item?.status ?? firstStatus);
   const [dueDate, setDueDate] = useState(item?.dueDate ?? '');
   const [opsNote, setOpsNote] = useState(item?.opsNote ?? '');
   const [techNote, setTechNote] = useState(item?.techNote ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [justAdded, setJustAdded] = useState('');
-
-  // 編輯時，項目的大項目可能已不在清單裡：保留成一個選項，避免儲存時默默改掉
-  const projectChoices =
-    item && !projects.some((p) => p.id === item.projectId)
-      ? [...projects, { id: item.projectId, name: T.deletedOption }]
-      : projects;
 
   const submit = async (keepAdding: boolean) => {
     if (!name.trim()) {
@@ -73,16 +71,7 @@ export default function ProgressSheet({
     setError('');
     try {
       await onSave(
-        {
-          name,
-          projectId,
-          opsPriority: opsPriority || undefined,
-          techLevel: techLevel || undefined,
-          status,
-          dueDate,
-          opsNote,
-          techNote,
-        },
+        { name, projectId, opsPriority, techLevel, status, dueDate, opsNote, techNote },
         keepAdding
       );
       if (keepAdding) {
@@ -93,7 +82,7 @@ export default function ProgressSheet({
         setDueDate('');
         setOpsPriority('');
         setTechLevel('');
-        setStatus('proposed');
+        setStatus(firstStatus);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : T.errorSaveFailed);
@@ -132,9 +121,9 @@ export default function ProgressSheet({
 
           <Field label={T.fieldProject}>
             <select value={projectId} onChange={(e) => setProjectId(e.target.value)} className={fieldClass}>
-              {projectChoices.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
+              {withCurrent(opts.projects, item?.projectId).map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.label}
                 </option>
               ))}
             </select>
@@ -142,29 +131,21 @@ export default function ProgressSheet({
 
           <div className="grid grid-cols-2 gap-3">
             <Field label={T.fieldOps}>
-              <select
-                value={opsPriority}
-                onChange={(e) => setOpsPriority(e.target.value as OpsPriority | '')}
-                className={fieldClass}
-              >
+              <select value={opsPriority} onChange={(e) => setOpsPriority(e.target.value)} className={fieldClass}>
                 <option value="">{T.unsetOps}</option>
-                {OPS_PRIORITIES.map((c) => (
-                  <option key={c.value} value={c.value}>
-                    {c.label}　{c.hint}
+                {withCurrent(opts.priorities, item?.opsPriority).map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.label}
                   </option>
                 ))}
               </select>
             </Field>
             <Field label={T.fieldTech}>
-              <select
-                value={techLevel}
-                onChange={(e) => setTechLevel(e.target.value as TechLevel | '')}
-                className={fieldClass}
-              >
+              <select value={techLevel} onChange={(e) => setTechLevel(e.target.value)} className={fieldClass}>
                 <option value="">{T.unsetTech}</option>
-                {TECH_LEVELS.map((c) => (
-                  <option key={c.value} value={c.value}>
-                    {c.label}　{c.hint}
+                {withCurrent(opts.techLevels, item?.techLevel).map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.label}
                   </option>
                 ))}
               </select>
@@ -173,14 +154,10 @@ export default function ProgressSheet({
 
           <div className="grid grid-cols-2 gap-3">
             <Field label={T.fieldStatus}>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value as ProgressStatus)}
-                className={fieldClass}
-              >
-                {PROGRESS_STATUSES.map((c) => (
-                  <option key={c.value} value={c.value}>
-                    {c.label}　{c.hint}
+              <select value={status} onChange={(e) => setStatus(e.target.value)} className={fieldClass}>
+                {withCurrent(opts.statuses, item?.status).map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.label}
                   </option>
                 ))}
               </select>

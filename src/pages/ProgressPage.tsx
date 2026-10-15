@@ -13,6 +13,7 @@ import { useProgressData } from '../hooks/useProgressData';
 import { useRole } from '../hooks/useRole';
 import {
   completeItem,
+  doneStatusIds,
   editItem,
   filterItems,
   newItem,
@@ -52,7 +53,7 @@ function readLastProject(): string | undefined {
 }
 
 export default function ProgressPage() {
-  const { loading, items, reload } = useProgressData();
+  const { loading, items, options: opts, reload } = useProgressData();
   const role = useRole();
   const [view, setView] = useState<View>('open');
   const [sort, setSort] = useState<ProgressSort>(loadSort);
@@ -73,18 +74,19 @@ export default function ProgressPage() {
   const [frozen, setFrozen] = useState<Map<string, ProgressItem>>(() => new Map());
 
   const filtered = useMemo(() => filterItems(items, filter), [items, filter]);
+  const doneIds = useMemo(() => doneStatusIds(opts), [opts]);
   const open = useMemo(
-    () => sortItemsStable(filtered.filter((i) => i.status !== 'done'), sort, frozen),
-    [filtered, sort, frozen]
+    () => sortItemsStable(filtered.filter((i) => !doneIds.has(i.status)), sort, opts, frozen),
+    [filtered, doneIds, sort, opts, frozen]
   );
   const done = useMemo(
     () =>
       filtered
-        .filter((i) => i.status === 'done')
+        .filter((i) => doneIds.has(i.status))
         .sort((a, b) => (b.doneAt ?? '').localeCompare(a.doneAt ?? '') || b.updatedAt.localeCompare(a.updatedAt)),
-    [filtered]
+    [filtered, doneIds]
   );
-  const summary = useMemo(() => summarize(filtered, today), [filtered, today]);
+  const summary = useMemo(() => summarize(filtered, opts, today), [filtered, opts, today]);
 
   const changeFilter = (patch: Partial<ProgressFilter>) => {
     setFilter((f) => ({ ...f, ...patch }));
@@ -108,21 +110,22 @@ export default function ProgressPage() {
 
   const patch = async (item: ProgressItem, change: ProgressPatch) => {
     setFrozen((prev) => (prev.has(item.id) ? prev : new Map(prev).set(item.id, item)));
-    await progressRepo.save(patchItem(item, change));
+    await progressRepo.save(patchItem(item, change, opts));
     reload();
   };
 
   const toggle = async (item: ProgressItem) => {
-    await progressRepo.save(item.status === 'done' ? reopenItem(item) : completeItem(item));
+    const next = doneIds.has(item.status) ? reopenItem(item, opts) : completeItem(item, opts);
+    if (next) await progressRepo.save(next);
     reload();
   };
 
   const save = async (input: ProgressInput, keepAdding: boolean) => {
     if (sheet?.item) {
-      await progressRepo.save(editItem(sheet.item, input));
+      await progressRepo.save(editItem(sheet.item, input, opts));
       setSheet(null);
     } else {
-      await progressRepo.save(newItem(input, role.email));
+      await progressRepo.save(newItem(input, role.email, opts));
       try {
         localStorage.setItem(LAST_PROJECT_KEY, input.projectId);
       } catch {
@@ -147,8 +150,8 @@ export default function ProgressPage() {
     items.length === 0 ? T.emptyNone : filter.projectId ? T.emptyFiltered : fallback;
 
   const tabs: { value: View; label: string; count: number }[] = [
-    { value: 'open', label: T.viewOpen, count: items.filter((i) => i.status !== 'done').length },
-    { value: 'done', label: T.viewDone, count: items.filter((i) => i.status === 'done').length },
+    { value: 'open', label: T.viewOpen, count: items.filter((i) => !doneIds.has(i.status)).length },
+    { value: 'done', label: T.viewDone, count: items.filter((i) => doneIds.has(i.status)).length },
   ];
 
   return (
@@ -163,7 +166,7 @@ export default function ProgressPage() {
               {T.pageTitle}
               <SyncDot />
             </h1>
-            <HeaderActions />
+            <HeaderActions progressSettings />
           </div>
 
           <div role="tablist" aria-label={T.pageTitle} className="mb-3 flex w-full rounded-full bg-ground p-1 md:w-fit">
@@ -184,7 +187,14 @@ export default function ProgressPage() {
             ))}
           </div>
 
-          <ProgressFilters filter={filter} sort={sort} showSort={view === 'open'} onChange={changeFilter} onSort={changeSort} />
+          <ProgressFilters
+            opts={opts}
+            filter={filter}
+            sort={sort}
+            showSort={view === 'open'}
+            onChange={changeFilter}
+            onSort={changeSort}
+          />
         </div>
       </header>
 
@@ -205,7 +215,7 @@ export default function ProgressPage() {
                 )}
                 {summary.urgent > 0 && (
                   <>
-                    ，{T.summaryUrgent} <b className="font-semibold text-danger">{summary.urgent}</b> {T.summaryUnit}
+                    ，{opts.priorities[0]?.name} <b className="font-semibold text-danger">{summary.urgent}</b> {T.summaryUnit}
                   </>
                 )}
                 {summary.overdue > 0 && (
@@ -217,6 +227,7 @@ export default function ProgressPage() {
             )}
             <ProgressBoard
               items={open}
+              opts={opts}
               today={today}
               emptyText={emptyFor(T.emptyOpen)}
               onToggle={(i) => void toggle(i)}
@@ -227,6 +238,7 @@ export default function ProgressPage() {
         ) : (
           <ProgressBoard
             items={done}
+            opts={opts}
             today={today}
             emptyText={emptyFor(T.emptyDone)}
             onToggle={(i) => void toggle(i)}
@@ -242,7 +254,13 @@ export default function ProgressPage() {
           aria-label={T.addButtonLabel}
           onClick={() => setSheet({})}
           className="fixed right-5 z-10 flex h-14 w-14 items-center justify-center rounded-full bg-ink text-white shadow-[0_4px_16px_rgba(0,0,0,0.2)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
-          style={{ bottom: role.limited ? 'calc(env(safe-area-inset-bottom) + 20px)' : 'calc(env(safe-area-inset-bottom) + 76px)' }}
+          // 只有這一頁可用時沒有分頁列，按鈕貼近底部
+          style={{
+            bottom:
+              role.people || role.todo
+                ? 'calc(env(safe-area-inset-bottom) + 76px)'
+                : 'calc(env(safe-area-inset-bottom) + 20px)',
+          }}
         >
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
@@ -256,6 +274,7 @@ export default function ProgressPage() {
         <ProgressSheet
           key={sheet.item?.id ?? 'new'}
           item={sheet.item}
+          opts={opts}
           defaults={{ projectId: filter.projectId ?? readLastProject() }}
           onSave={save}
           onDelete={sheet.item ? () => setConfirmDelete(sheet.item!) : undefined}

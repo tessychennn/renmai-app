@@ -1,42 +1,63 @@
+import { PROGRESS_OPTION_SEED_TIME } from '../defaultProgressOptions';
 import { OPTION_SEED_TIME } from '../defaultTaskOptions';
 import { dirtyKey, getDB, savePhotoVariant } from './db';
-import type { Group, Person, ProgressItem, Task, TaskOption } from '../types';
+import type { Client, Group, Person, ProgressItem, ProgressOption, Task, TaskOption } from '../types';
 import type { DirtyEntry, EntityKind, SyncLocal, SyncScope } from '../../sync/types';
+import { FULL_SYNC_SCOPE } from '../../sync/types';
 
-const initializedKey = (scope: SyncScope) => (scope === 'all' ? 'cloudInitialized' : `cloudInitialized:${scope}`);
+/** 同步範圍 → 「第一次啟用雲端」的完成記號。完整範圍沿用最初的名稱，所以舊裝置不會重做。 */
+const initializedKey = (scope: SyncScope) =>
+  scope.people && scope.todo && scope.progress
+    ? 'cloudInitialized'
+    : `cloudInitialized:${(['people', 'todo', 'progress'] as const).filter((k) => scope[k]).join('+') || 'none'}`;
 
 /** 單筆資料種類 → 對應的 object store */
 const STORE_OF = {
   person: 'persons',
   group: 'groups',
+  client: 'clients',
   task: 'tasks',
   option: 'taskOptions',
   item: 'progress',
+  popt: 'progressOptions',
 } as const;
 
 export class IndexedDBSyncLocal implements SyncLocal {
-  async isInitialized(scope: SyncScope = 'all'): Promise<boolean> {
+  async isInitialized(scope: SyncScope = FULL_SYNC_SCOPE): Promise<boolean> {
     const db = await getDB();
     return (await db.get('syncMeta', initializedKey(scope))) === true;
   }
 
-  async initialize(scope: SyncScope = 'all'): Promise<void> {
+  async initialize(scope: SyncScope = FULL_SYNC_SCOPE): Promise<void> {
     const db = await getDB();
     const tx = db.transaction(
-      ['persons', 'groups', 'tasks', 'taskOptions', 'progress', 'dirty', 'syncMeta'],
+      ['persons', 'groups', 'clients', 'tasks', 'taskOptions', 'progress', 'progressOptions', 'dirty', 'syncMeta'],
       'readwrite'
     );
     const dirty = tx.objectStore('dirty');
-    for (const i of await tx.objectStore('progress').getAll()) {
-      await dirty.put({ key: dirtyKey('item', i.id), kind: 'item', id: i.id });
+    if (scope.progress) {
+      for (const i of await tx.objectStore('progress').getAll()) {
+        await dirty.put({ key: dirtyKey('item', i.id), kind: 'item', id: i.id });
+      }
+      for (const o of await tx.objectStore('progressOptions').getAll()) {
+        // 沒被改過的預設選項不上傳（見 defaultProgressOptions.ts）
+        if (o.updatedAt !== PROGRESS_OPTION_SEED_TIME) {
+          await dirty.put({ key: dirtyKey('popt', o.id), kind: 'popt', id: o.id });
+        }
+      }
     }
-    if (scope === 'all') {
+    if (scope.people) {
       for (const p of await tx.objectStore('persons').getAll()) {
         await dirty.put({ key: dirtyKey('person', p.id), kind: 'person', id: p.id });
       }
       for (const g of await tx.objectStore('groups').getAll()) {
         await dirty.put({ key: dirtyKey('group', g.id), kind: 'group', id: g.id });
       }
+      for (const c of await tx.objectStore('clients').getAll()) {
+        await dirty.put({ key: dirtyKey('client', c.id), kind: 'client', id: c.id });
+      }
+    }
+    if (scope.todo) {
       for (const t of await tx.objectStore('tasks').getAll()) {
         await dirty.put({ key: dirtyKey('task', t.id), kind: 'task', id: t.id });
       }
@@ -71,6 +92,14 @@ export class IndexedDBSyncLocal implements SyncLocal {
     return (await getDB()).getAll('progress');
   }
 
+  async listClients(): Promise<Client[]> {
+    return (await getDB()).getAll('clients');
+  }
+
+  async listProgressOptions(): Promise<ProgressOption[]> {
+    return (await getDB()).getAll('progressOptions');
+  }
+
   async getPerson(id: string): Promise<Person | undefined> {
     return (await getDB()).get('persons', id);
   }
@@ -89,6 +118,14 @@ export class IndexedDBSyncLocal implements SyncLocal {
 
   async getProgress(id: string): Promise<ProgressItem | undefined> {
     return (await getDB()).get('progress', id);
+  }
+
+  async getClient(id: string): Promise<Client | undefined> {
+    return (await getDB()).get('clients', id);
+  }
+
+  async getProgressOption(id: string): Promise<ProgressOption | undefined> {
+    return (await getDB()).get('progressOptions', id);
   }
 
   /** 寫入雲端版本：只有比本機新才寫，並清掉該筆的待上傳標記 */
@@ -134,6 +171,14 @@ export class IndexedDBSyncLocal implements SyncLocal {
     return this.applyEntity('item', item);
   }
 
+  applyClient(client: Client): Promise<boolean> {
+    return this.applyEntity('client', client);
+  }
+
+  applyProgressOption(option: ProgressOption): Promise<boolean> {
+    return this.applyEntity('popt', option);
+  }
+
   async markDirty(kind: EntityKind, id: string): Promise<void> {
     const db = await getDB();
     await db.put('dirty', { key: dirtyKey(kind, id), kind, id });
@@ -146,7 +191,7 @@ export class IndexedDBSyncLocal implements SyncLocal {
   async clearDirty(key: string, ifUpdatedAt?: string): Promise<void> {
     const db = await getDB();
     const tx = db.transaction(
-      ['dirty', 'persons', 'groups', 'tasks', 'taskOptions', 'progress'],
+      ['dirty', 'persons', 'groups', 'clients', 'tasks', 'taskOptions', 'progress', 'progressOptions'],
       'readwrite'
     );
     if (ifUpdatedAt) {

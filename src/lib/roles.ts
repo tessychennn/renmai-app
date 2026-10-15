@@ -1,49 +1,91 @@
-// 登入者的身分（Cognito 群組）：
-//   admin  管理員：全部功能，可以改待辦的選項設定
-//   team   團隊成員：人脈記錄、待辦、產品進度
-//   tech   技術端：只能用產品進度（伺服器端也只開放這一張資料表，見 amplify/data/resource.ts）
-// 同時屬於 team 或 admin 的人，以較大的權限為準。
+// 登入者的身分（Cognito 群組）決定能用哪些頁面。權限由 AWS 伺服器強制執行（見 amplify/data/resource.ts），
+// 這裡只是決定畫面上要顯示哪些頁面與按鈕，以及同步時要去讀哪些資料。
+//
+//   admin  管理員：全部功能，並且是唯一能修改選項設定的人
+//   team   團隊成員：人脈記錄、客戶、待辦、產品進度
+//   tech   技術端：產品進度
+//   todo   待辦（可以和 tech 一起加給同一個帳號）
+//
+// 一個帳號可以同時屬於多個群組，權限是各群組的合併。
 
-const ADMIN_KEY = 'renmai.isAdmin';
-const LIMITED_KEY = 'renmai.limited';
-
-/** 只屬於 tech 群組（沒有 admin 或 team）的人，只能看到產品進度 */
-export function isLimitedGroups(groups: readonly string[]): boolean {
-  return groups.includes('tech') && !groups.includes('admin') && !groups.includes('team');
+export interface Access {
+  /** 管理員：可以修改各種選項設定 */
+  admin: boolean;
+  /** 人脈記錄、客戶（含設定頁、備份匯出入） */
+  people: boolean;
+  todo: boolean;
+  progress: boolean;
 }
 
-function read(key: string): boolean {
-  try {
-    return localStorage.getItem(key) === '1';
-  } catch {
-    return false;
-  }
+export const FULL_ACCESS: Access = { admin: true, people: true, todo: true, progress: true };
+export const NO_ACCESS: Access = { admin: false, people: false, todo: false, progress: false };
+
+export function accessOf(groups: readonly string[]): Access {
+  const admin = groups.includes('admin');
+  const team = groups.includes('team');
+  return {
+    admin,
+    people: admin || team,
+    todo: admin || team || groups.includes('todo'),
+    progress: admin || team || groups.includes('tech'),
+  };
 }
 
-function write(key: string, value: boolean): void {
+const ACCESS_KEY = 'renmai.access';
+
+/** 記住上次確認過的身分：離線或剛開 App 還讀不到群組時沿用 */
+export function cacheAccess(groups: readonly string[]): Access {
+  const access = accessOf(groups);
   try {
-    localStorage.setItem(key, value ? '1' : '0');
+    localStorage.setItem(ACCESS_KEY, JSON.stringify(access));
   } catch {
     // 存不了只影響離線時的顯示
   }
+  return access;
 }
 
-/** 記住上次確認過的身分：離線或剛開 App 還讀不到群組時沿用 */
-export function cacheRole(groups: readonly string[]): { isAdmin: boolean; limited: boolean } {
-  const role = { isAdmin: groups.includes('admin'), limited: isLimitedGroups(groups) };
-  write(ADMIN_KEY, role.isAdmin);
-  write(LIMITED_KEY, role.limited);
-  return role;
+/** 上次確認過的身分；沒有記錄（還沒登入過）回傳 undefined */
+export function cachedAccess(): Access | undefined {
+  try {
+    const raw = localStorage.getItem(ACCESS_KEY);
+    if (!raw) {
+      // 舊版只記「是不是管理員」與「是不是只能用產品進度」
+      if (localStorage.getItem('renmai.isAdmin') === '1') return FULL_ACCESS;
+      if (localStorage.getItem('renmai.limited') === '1') return { ...NO_ACCESS, progress: true };
+      return undefined;
+    }
+    const v = JSON.parse(raw) as Partial<Access>;
+    return {
+      admin: v.admin === true,
+      people: v.people === true,
+      todo: v.todo === true,
+      progress: v.progress === true,
+    };
+  } catch {
+    return undefined;
+  }
 }
-
-export const cachedAdmin = (): boolean => read(ADMIN_KEY);
-export const cachedLimited = (): boolean => read(LIMITED_KEY);
 
 export function clearCachedRole(): void {
   try {
-    localStorage.removeItem(ADMIN_KEY);
-    localStorage.removeItem(LIMITED_KEY);
+    localStorage.removeItem(ACCESS_KEY);
+    // 舊版留下的記號
+    localStorage.removeItem('renmai.isAdmin');
+    localStorage.removeItem('renmai.limited');
   } catch {
     // 同上
   }
+}
+
+/** 同步範圍：有權限的資料才去讀寫（沒權限的資料伺服器會拒絕） */
+export function syncScopeOf(access: Access): { people: boolean; todo: boolean; progress: boolean } {
+  return { people: access.people, todo: access.todo, progress: access.progress };
+}
+
+/** 這個身分第一個能進的頁面（首頁不能進時導到這裡） */
+export function homeRoute(access: Access): string {
+  if (access.people) return '/';
+  if (access.todo) return '/tasks';
+  if (access.progress) return '/progress';
+  return '/';
 }

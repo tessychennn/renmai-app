@@ -1,79 +1,95 @@
-import type { OpsPriority, ProgressItem, ProgressStatus, TechLevel } from '../data/types';
-import {
-  OPS_PRIORITY_CHOICES,
-  PROGRESS_STATUS_CHOICES,
-  PROGRESS_TEXT,
-  PROJECTS,
-  TECH_LEVEL_CHOICES,
-  type Choice,
-} from '../text/productProgress';
+import type { ProgressItem, ProgressOption } from '../data/types';
 import type { StatusColor } from './statusTone';
 import { todayStr } from './tasks';
 
 // 產品進度：營運端排「優先級」，技術端排「技術等級」，兩個欄位分開、由不同的人填。
-// 所有顯示的文字與選項清單都在 src/text/productProgress.ts。
+// 大項目、營運優先級、技術等級、狀態都是管理員在「產品進度設定」維護的選項，項目用編號引用。
+// 第一次啟動的預設選項在 src/text/productProgress.ts；畫面上其他的文字也在那個檔案。
 
-export type { Choice };
+export const STATUS_COLORS: readonly StatusColor[] = ['gray', 'green', 'yellow', 'red', 'purple', 'blue'];
 
-export const OPS_PRIORITIES: readonly Choice<OpsPriority>[] = OPS_PRIORITY_CHOICES;
-export const TECH_LEVELS: readonly Choice<TechLevel>[] = TECH_LEVEL_CHOICES;
-export const PROGRESS_STATUSES: readonly Choice<ProgressStatus>[] = PROGRESS_STATUS_CHOICES;
+export const parseColor = (v: string | undefined): StatusColor =>
+  STATUS_COLORS.find((c) => c === v) ?? 'gray';
 
-const parser =
-  <T extends string>(list: readonly Choice<T>[]) =>
-  (v: string | null | undefined): T | undefined =>
-    list.find((c) => c.value === v)?.value;
+/** 產品進度的選項，依種類分好、依順序排好 */
+export interface ProgressOptions {
+  projects: ProgressOption[];
+  priorities: ProgressOption[];
+  techLevels: ProgressOption[];
+  statuses: ProgressOption[];
+}
 
-export const parseOpsPriority = parser(OPS_PRIORITIES);
-export const parseTechLevel = parser(TECH_LEVELS);
-export const parseProgressStatus = parser(PROGRESS_STATUSES);
+export const EMPTY_PROGRESS_OPTIONS: ProgressOptions = {
+  projects: [],
+  priorities: [],
+  techLevels: [],
+  statuses: [],
+};
 
-export const labelOf = <T extends string>(list: readonly Choice<T>[], value: T | undefined): string | undefined =>
-  value ? list.find((c) => c.value === value)?.label : undefined;
+export function splitProgressOptions(options: ProgressOption[]): ProgressOptions {
+  const sorted = (kind: ProgressOption['kind']) =>
+    options.filter((o) => o.kind === kind && !o.deletedAt).sort((a, b) => a.order - b.order);
+  return {
+    projects: sorted('project'),
+    priorities: sorted('priority'),
+    techLevels: sorted('tech'),
+    statuses: sorted('status'),
+  };
+}
 
-export const colorOf = <T extends string>(list: readonly Choice<T>[], value: T | undefined): StatusColor | undefined =>
-  value ? list.find((c) => c.value === value)?.color : undefined;
+export const optionById = (list: ProgressOption[], id: string | undefined): ProgressOption | undefined =>
+  id ? list.find((o) => o.id === id) : undefined;
+
+/** 標籤上顯示的顏色；選項不存在（被刪了）或沒設定就是灰 */
+export const colorOf = (list: ProgressOption[], id: string | undefined): StatusColor | undefined => {
+  const option = optionById(list, id);
+  return option ? parseColor(option.color) : undefined;
+};
+
+/** 代表「完成」的狀態編號 */
+export const doneStatusIds = (opts: ProgressOptions): Set<string> =>
+  new Set(opts.statuses.filter((s) => s.isDone).map((s) => s.id));
+
+export const isDone = (item: ProgressItem, opts: ProgressOptions): boolean => doneStatusIds(opts).has(item.status);
+
+/** 打勾完成用哪個狀態：第一個代表完成的狀態；沒有就不能打勾 */
+export const completeStatusId = (opts: ProgressOptions): string | undefined =>
+  opts.statuses.find((s) => s.isDone)?.id;
+
+/** 取消完成退回哪個狀態：完成狀態前面緊鄰的那個；找不到就用第一個非完成的狀態 */
+export function reopenStatusId(opts: ProgressOptions): string | undefined {
+  const doneIndex = opts.statuses.findIndex((s) => s.isDone);
+  const before = doneIndex > 0 ? opts.statuses.slice(0, doneIndex).reverse().find((s) => !s.isDone) : undefined;
+  return (before ?? opts.statuses.find((s) => !s.isDone))?.id;
+}
 
 // ── 排序、篩選、分組 ──
 
 export type ProgressSort = 'ops' | 'tech' | 'due';
 
-export const SORT_LABEL: Record<ProgressSort, string> = {
-  ops: PROGRESS_TEXT.sortOps,
-  tech: PROGRESS_TEXT.sortTech,
-  due: PROGRESS_TEXT.sortDue,
-};
-
 const NO_DATE = '9999-99-99';
 const UNSET = 99;
 
-const opsRank = (i: ProgressItem) => {
-  const k = OPS_PRIORITIES.findIndex((c) => c.value === i.opsPriority);
-  return k < 0 ? UNSET : k;
-};
-
-/** 技術等級由小到大（S 最先）；沒填的、需研究的排最後 */
-const techRank = (i: ProgressItem) => {
-  const k = TECH_LEVELS.findIndex((c) => c.value === i.techLevel);
+const rankIn = (list: ProgressOption[], id: string | undefined) => {
+  const k = id ? list.findIndex((o) => o.id === id) : -1;
   return k < 0 ? UNSET : k;
 };
 
 /**
- * 同一個大項目內的排序。
- * - ops：營運優先級（P0 在前），同級再看技術等級（簡單的先），再看目標日期
- * - tech：技術等級（簡單的先），同級再看營運優先級
+ * 同一個大項目內的排序（清單上排在越前面的選項越優先）。
+ * - ops：營運優先級（第一個在前），同級再看技術等級（排前面的先），再看目標日期
+ * - tech：技術等級（排前面的先），同級再看營運優先級
  * - due：目標日期近的在前（沒有的最後），同日再看營運優先級
- * 最後都用建立時間定順序，讓結果穩定。
+ * 最後都用建立時間定順序，讓結果穩定。沒填的排最後。
  */
-export function sortItems(items: ProgressItem[], sort: ProgressSort): ProgressItem[] {
+export function sortItems(items: ProgressItem[], sort: ProgressSort, opts: ProgressOptions): ProgressItem[] {
+  const ops = (i: ProgressItem) => rankIn(opts.priorities, i.opsPriority);
+  const tech = (i: ProgressItem) => rankIn(opts.techLevels, i.techLevel);
   const due = (i: ProgressItem) => i.dueDate ?? NO_DATE;
   const compare = {
-    ops: (a: ProgressItem, b: ProgressItem) =>
-      opsRank(a) - opsRank(b) || techRank(a) - techRank(b) || due(a).localeCompare(due(b)),
-    tech: (a: ProgressItem, b: ProgressItem) =>
-      techRank(a) - techRank(b) || opsRank(a) - opsRank(b) || due(a).localeCompare(due(b)),
-    due: (a: ProgressItem, b: ProgressItem) =>
-      due(a).localeCompare(due(b)) || opsRank(a) - opsRank(b) || techRank(a) - techRank(b),
+    ops: (a: ProgressItem, b: ProgressItem) => ops(a) - ops(b) || tech(a) - tech(b) || due(a).localeCompare(due(b)),
+    tech: (a: ProgressItem, b: ProgressItem) => tech(a) - tech(b) || ops(a) - ops(b) || due(a).localeCompare(due(b)),
+    due: (a: ProgressItem, b: ProgressItem) => due(a).localeCompare(due(b)) || ops(a) - ops(b) || tech(a) - tech(b),
   }[sort];
   return [...items].sort((a, b) => compare(a, b) || a.createdAt.localeCompare(b.createdAt));
 }
@@ -82,12 +98,14 @@ export function sortItems(items: ProgressItem[], sort: ProgressSort): ProgressIt
 export function sortItemsStable(
   items: ProgressItem[],
   sort: ProgressSort,
+  opts: ProgressOptions,
   frozen: ReadonlyMap<string, ProgressItem>
 ): ProgressItem[] {
   const current = new Map(items.map((i) => [i.id, i]));
   return sortItems(
     items.map((i) => frozen.get(i.id) ?? i),
-    sort
+    sort,
+    opts
   ).map((i) => current.get(i.id)!);
 }
 
@@ -100,50 +118,42 @@ export function filterItems(items: ProgressItem[], filter: ProgressFilter): Prog
   return items.filter((i) => !filter.projectId || i.projectId === filter.projectId);
 }
 
-export interface ProjectRef {
-  id: string;
-  name: string;
-}
-
-export const projects: readonly ProjectRef[] = PROJECTS;
-
 export interface ProjectGroup {
-  /** null = 項目的大項目不在清單裡（例如從清單刪掉了） */
-  project: ProjectRef | null;
+  /** null = 項目的大項目不在清單裡（例如被刪掉了） */
+  project: ProgressOption | null;
   items: ProgressItem[];
 }
 
 /** 依大項目清單的順序分組，空的大項目不列出；找不到大項目的歸在最後一組 */
-export function groupByProject(items: ProgressItem[], projectList: readonly ProjectRef[] = projects): ProjectGroup[] {
-  const groups: ProjectGroup[] = projectList
+export function groupByProject(items: ProgressItem[], projects: ProgressOption[]): ProjectGroup[] {
+  const groups: ProjectGroup[] = projects
     .map((project) => ({ project, items: items.filter((i) => i.projectId === project.id) }))
     .filter((g) => g.items.length > 0);
-  const known = new Set(projectList.map((p) => p.id));
+  const known = new Set(projects.map((p) => p.id));
   const orphans = items.filter((i) => !known.has(i.projectId));
   if (orphans.length > 0) groups.push({ project: null, items: orphans });
   return groups;
 }
 
-/** 做完的與擱置中的不算「進行中的工作」 */
-export const isOpen = (i: ProgressItem) => i.status !== 'done';
-
 export interface ProgressSummary {
   open: number;
   /** 技術端還沒填技術等級的（開會時要先討論的） */
   needsAssessment: number;
-  /** 營運標了 P0 還沒完成的 */
+  /** 營運標了最高優先級（優先級清單的第一個）還沒完成的 */
   urgent: number;
   /** 目標日期已過還沒完成的 */
   overdue: number;
 }
 
-export function summarize(items: ProgressItem[], today = todayStr()): ProgressSummary {
-  const open = items.filter(isOpen);
+export function summarize(items: ProgressItem[], opts: ProgressOptions, today = todayStr()): ProgressSummary {
+  const done = doneStatusIds(opts);
+  const open = items.filter((i) => !done.has(i.status));
+  const top = opts.priorities[0]?.id;
   return {
     open: open.length,
-    needsAssessment: open.filter((i) => !i.techLevel && i.status !== 'paused').length,
-    urgent: open.filter((i) => i.opsPriority === 'P0').length,
-    overdue: open.filter((i) => i.dueDate && i.dueDate < today && i.status !== 'paused').length,
+    needsAssessment: open.filter((i) => !i.techLevel).length,
+    urgent: top ? open.filter((i) => i.opsPriority === top).length : 0,
+    overdue: open.filter((i) => i.dueDate && i.dueDate < today).length,
   };
 }
 
@@ -152,9 +162,9 @@ export function summarize(items: ProgressItem[], today = todayStr()): ProgressSu
 export interface ProgressInput {
   name: string;
   projectId: string;
-  opsPriority?: OpsPriority;
-  techLevel?: TechLevel;
-  status: ProgressStatus;
+  opsPriority?: string;
+  techLevel?: string;
+  status: string;
   dueDate?: string;
   opsNote?: string;
   techNote?: string;
@@ -169,8 +179,8 @@ function fieldsOf(input: ProgressInput) {
   return {
     name: input.name.trim(),
     projectId: input.projectId,
-    opsPriority: input.opsPriority,
-    techLevel: input.techLevel,
+    opsPriority: clean(input.opsPriority),
+    techLevel: clean(input.techLevel),
     status: input.status,
     dueDate: clean(input.dueDate),
     opsNote: clean(input.opsNote),
@@ -179,15 +189,26 @@ function fieldsOf(input: ProgressInput) {
 }
 
 /** 完成日跟著狀態走：改成完成就記下今天，改回去就清掉 */
-function withDoneDate(prev: ProgressItem | undefined, next: ProgressItem, now: Date): ProgressItem {
-  if (next.status === 'done') {
-    return { ...next, doneAt: prev?.status === 'done' && prev.doneAt ? prev.doneAt : todayStr(now) };
+function withDoneDate(
+  prev: ProgressItem | undefined,
+  next: ProgressItem,
+  opts: ProgressOptions,
+  now: Date
+): ProgressItem {
+  const done = doneStatusIds(opts);
+  if (done.has(next.status)) {
+    return { ...next, doneAt: prev && done.has(prev.status) && prev.doneAt ? prev.doneAt : todayStr(now) };
   }
   const { doneAt: _doneAt, ...rest } = next;
   return rest;
 }
 
-export function newItem(input: ProgressInput, createdBy: string | undefined, now = new Date()): ProgressItem {
+export function newItem(
+  input: ProgressInput,
+  createdBy: string | undefined,
+  opts: ProgressOptions,
+  now = new Date()
+): ProgressItem {
   const iso = now.toISOString();
   return withDoneDate(
     undefined,
@@ -198,44 +219,48 @@ export function newItem(input: ProgressInput, createdBy: string | undefined, now
       createdAt: iso,
       updatedAt: iso,
     },
+    opts,
     now
   );
 }
 
-export function editItem(item: ProgressItem, input: ProgressInput, now = new Date()): ProgressItem {
-  return withDoneDate(item, { ...item, ...fieldsOf(input), updatedAt: now.toISOString() }, now);
+export function editItem(item: ProgressItem, input: ProgressInput, opts: ProgressOptions, now = new Date()): ProgressItem {
+  return withDoneDate(item, { ...item, ...fieldsOf(input), updatedAt: now.toISOString() }, opts, now);
 }
 
 /** 列上直接修改的欄位。undefined 的欄位不動；空字串代表清掉。 */
 export interface ProgressPatch {
-  opsPriority?: OpsPriority | '';
-  techLevel?: TechLevel | '';
-  status?: ProgressStatus;
+  opsPriority?: string;
+  techLevel?: string;
+  status?: string;
   dueDate?: string;
 }
 
-export function patchItem(item: ProgressItem, patch: ProgressPatch, now = new Date()): ProgressItem {
+export function patchItem(
+  item: ProgressItem,
+  patch: ProgressPatch,
+  opts: ProgressOptions,
+  now = new Date()
+): ProgressItem {
   const next: ProgressItem = { ...item, updatedAt: now.toISOString() };
-  if (patch.opsPriority !== undefined) {
-    if (patch.opsPriority) next.opsPriority = patch.opsPriority;
-    else delete next.opsPriority;
-  }
-  if (patch.techLevel !== undefined) {
-    if (patch.techLevel) next.techLevel = patch.techLevel;
-    else delete next.techLevel;
+  for (const key of ['opsPriority', 'techLevel', 'dueDate'] as const) {
+    const value = patch[key];
+    if (value === undefined) continue;
+    if (value) next[key] = value;
+    else delete next[key];
   }
   if (patch.status !== undefined) next.status = patch.status;
-  if (patch.dueDate !== undefined) {
-    if (patch.dueDate) next.dueDate = patch.dueDate;
-    else delete next.dueDate;
-  }
-  return withDoneDate(item, next, now);
+  return withDoneDate(item, next, opts, now);
 }
 
-/** 打勾完成。完成日自動記錄 */
-export const completeItem = (item: ProgressItem, now = new Date()): ProgressItem =>
-  patchItem(item, { status: 'done' }, now);
+/** 打勾完成。完成日自動記錄。沒有任何「代表完成」的狀態時回傳 null（不能打勾）。 */
+export function completeItem(item: ProgressItem, opts: ProgressOptions, now = new Date()): ProgressItem | null {
+  const status = completeStatusId(opts);
+  return status ? patchItem(item, { status }, opts, now) : null;
+}
 
-/** 取消完成：退回「測試中」（完成前的最後一個階段） */
-export const reopenItem = (item: ProgressItem, now = new Date()): ProgressItem =>
-  patchItem(item, { status: 'testing' }, now);
+/** 取消完成：退回完成狀態前面的那個狀態 */
+export function reopenItem(item: ProgressItem, opts: ProgressOptions, now = new Date()): ProgressItem | null {
+  const status = reopenStatusId(opts);
+  return status ? patchItem(item, { status }, opts, now) : null;
+}
