@@ -37,11 +37,12 @@ const schema = a.schema({
     })
     .authorization((allow) => [allow.groups(['admin', 'team'])]),
 
-  // 客戶：人脈記錄裡被標記為「聯絡中」的人。編號是 client-人物編號（每個人最多一筆），
-  // 名字直接讀人物資料。狀態、負責人用待辦選項的編號。
+  // 客戶：聯絡中的名單。從人脈記錄標記的有 personId（編號是 client-人物編號，名字讀人物資料），
+  // 在客戶頁直接新增的沒有 personId、自己存 name。狀態是 App 端固定的代號，負責人用待辦選項的編號。
   Client: a
     .model({
-      personId: a.string().required(),
+      personId: a.string(),
+      name: a.string(),
       statusId: a.string(),
       ownerId: a.string(),
       dueDate: a.string(),

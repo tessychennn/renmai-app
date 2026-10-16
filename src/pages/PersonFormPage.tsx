@@ -2,11 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import CropModal, { type CropResult } from '../components/CropModal';
 import GlassHeader, { HEADER_PAD } from '../components/GlassHeader';
-import { clientRepo, groupRepo, personRepo, photoRepo, settingsRepo, taskOptionRepo } from '../data';
+import { clientRepo, groupRepo, personRepo, photoRepo, settingsRepo } from '../data';
 import { clientIdOf } from '../data/clientId';
 import { preloadScanner } from '../lib/documentScan';
 import { removeClient, setClient } from '../lib/clients';
-import type { Group, Person, TaskOption } from '../data/types';
+import { CLIENT_STATUSES } from '../text/clients';
+import type { Group, Person } from '../data/types';
 
 const DONE_CHOICE = '__done__';
 
@@ -50,7 +51,6 @@ export default function PersonFormPage() {
   const [lineName, setLineName] = useState('');
   const [showMore, setShowMore] = useState(false);
   // 客戶：'' = 不列入；DONE_CHOICE = 完成；其他 = 狀態的編號
-  const [taskStatuses, setTaskStatuses] = useState<TaskOption[]>([]);
   const [clientChoice, setClientChoice] = useState('');
   const [initialClientChoice, setInitialClientChoice] = useState('');
   const [groups, setGroups] = useState<Group[]>([]);
@@ -70,7 +70,6 @@ export default function PersonFormPage() {
   useEffect(() => {
     preloadScanner(); // 先在背景載 OpenCV，拍第一張時就不用等
     void groupRepo.list().then(setGroups);
-    void taskOptionRepo.list('status').then(setTaskStatuses);
     if (id) {
       void clientRepo.get(clientIdOf(id)).then((client) => {
         const choice = !client ? '' : client.done ? DONE_CHOICE : (client.statusId ?? '');
@@ -474,7 +473,7 @@ export default function PersonFormPage() {
             className={fieldClass}
           >
             <option value="">不列入</option>
-            {taskStatuses.map((s) => (
+            {CLIENT_STATUSES.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
               </option>

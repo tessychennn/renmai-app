@@ -11,6 +11,7 @@ import {
 } from '../data';
 import { clientIdOf } from '../data/clientId';
 import { usePhotoURL } from '../hooks/usePhotoURL';
+import { clientStatusOf } from '../lib/clients';
 import { optionName } from '../lib/tasks';
 import type { Client, Group, Person, TaskOption } from '../data/types';
 
@@ -42,7 +43,6 @@ export default function PersonDetailPage() {
 
   // 客戶紀錄（狀態、負責人、備註都在「客戶」頁管理）
   const [client, setClient] = useState<Client | null>(null);
-  const [statuses, setStatuses] = useState<TaskOption[]>([]);
   const [members, setMembers] = useState<TaskOption[]>([]);
 
   useEffect(() => {
@@ -50,7 +50,6 @@ export default function PersonDetailPage() {
     void personRepo.get(id).then(setPerson);
     void groupRepo.list().then(setGroups);
     void clientRepo.get(clientIdOf(id)).then(setClient);
-    void taskOptionRepo.list('status').then(setStatuses);
     void taskOptionRepo.list('member').then(setMembers);
   }, [id]);
 
@@ -83,7 +82,7 @@ export default function PersonDetailPage() {
   if (client) {
     rows.push({
       label: '客戶',
-      value: client.done ? '完成' : (optionName(statuses, client.statusId) ?? '已列入'),
+      value: client.done ? '完成' : (clientStatusOf(client.statusId)?.name ?? '已列入'),
     });
     const owner = optionName(members, client.ownerId);
     if (owner) rows.push({ label: '負責人', value: owner });

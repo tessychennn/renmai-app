@@ -7,17 +7,19 @@ import SyncDot from '../components/SyncDot';
 import TabBar from '../components/TabBar';
 import Toast from '../components/Toast';
 import { cloudEnabled } from '../cloud/config';
-import { clientRepo, groupRepo, personRepo, settingsRepo, taskOptionRepo } from '../data';
+import { clientRepo, groupRepo, personRepo, settingsRepo } from '../data';
 import { isBackupStale } from '../lib/backup';
 import {
   clientChip,
+  clientStatusOf,
   clientsByPerson,
   removeClient,
   setClient,
   type ClientChoice,
 } from '../lib/clients';
 import { syncEvents } from '../sync/manager';
-import type { Client, Group, Person, PersonSort, TaskOption } from '../data/types';
+import { CLIENT_STATUSES } from '../text/clients';
+import type { Client, Group, Person, PersonSort } from '../data/types';
 
 const SORT_OPTIONS: { value: PersonSort; label: string }[] = [
   { value: 'createdAt-desc', label: '最近加入' },
@@ -77,12 +79,8 @@ export default function HomePage() {
 
   // 客戶：被標記為「聯絡中」的人，狀態標籤看客戶紀錄
   const [clients, setClients] = useState<Client[]>([]);
-  const [statuses, setStatuses] = useState<TaskOption[]>([]);
   useEffect(() => {
-    void Promise.all([clientRepo.list(), taskOptionRepo.list('status')]).then(([c, s]) => {
-      setClients(c);
-      setStatuses(s);
-    });
+    void clientRepo.list().then(setClients);
   }, [reloadTick]);
   const clientOf = clientsByPerson(clients);
 
@@ -98,7 +96,7 @@ export default function HomePage() {
     }
     setClientTarget(null);
     setReloadTick((t) => t + 1);
-    const statusName = choice?.done ? '完成' : statuses.find((s) => s.id === choice?.statusId)?.name;
+    const statusName = choice?.done ? '完成' : clientStatusOf(choice?.statusId)?.name;
     setToast(
       choice === null
         ? `已將 ${person.displayName} 移出客戶`
@@ -214,7 +212,7 @@ export default function HomePage() {
                 <PersonCard
                   person={person}
                   groups={groups}
-                  client={clientOf.has(person.id) ? clientChip(clientOf.get(person.id)!, statuses) : undefined}
+                  client={clientOf.has(person.id) ? clientChip(clientOf.get(person.id)!) : undefined}
                   onLongPress={setClientTarget}
                 />
               </li>
@@ -240,7 +238,7 @@ export default function HomePage() {
         open={clientTarget !== null}
         title={clientTarget ? `${clientTarget.displayName} 的客戶狀態` : ''}
         choices={[
-          ...statuses.map((s) => ({
+          ...CLIENT_STATUSES.map((s) => ({
             label: s.name,
             selected: Boolean(targetClient && !targetClient.done && targetClient.statusId === s.id),
             onClick: () => clientTarget && void applyClient(clientTarget, { statusId: s.id }),

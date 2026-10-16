@@ -122,13 +122,18 @@ export interface ProgressOptionRepo {
 }
 
 /**
- * 客戶：人脈記錄裡被標記為「聯絡中」的人。每個人最多一筆，編號由人物編號固定推出（client-人物編號），
- * 兩支手機各自建立也是同一筆。名字不另存，直接讀人物資料，改名不會對不上。
+ * 客戶：聯絡中的名單。兩種來源：
+ * - 從人脈記錄標記的人：personId 指向人物，編號由人物編號固定推出（client-人物編號），兩支手機各自建立也是同一筆；
+ *   名字不另存，直接讀人物資料，改名不會對不上。
+ * - 在客戶頁直接新增的：沒有 personId，自己存名字（name），編號是隨機的。
  */
 export interface Client {
   id: string;
-  personId: string;
-  /** 狀態：待辦選項裡 kind = 'status' 的那一種 */
+  /** 從人脈記錄標記的才有 */
+  personId?: string;
+  /** 在客戶頁直接新增的才有；有連結人物的客戶名字讀人物資料 */
+  name?: string;
+  /** 狀態：src/text/clients.ts 裡的狀態編號 */
   statusId?: string;
   /** 負責人：待辦選項裡 kind = 'member' 的那一種 */
   ownerId?: string;

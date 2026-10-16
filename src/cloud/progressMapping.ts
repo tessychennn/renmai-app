@@ -75,7 +75,8 @@ export function progressOptionToFields(o: ProgressOption) {
 export function rowToClient(row: Schema['Client']['type']): Client {
   return {
     id: row.id,
-    personId: row.personId,
+    personId: row.personId ?? undefined,
+    name: row.name ?? undefined,
     statusId: row.statusId ?? undefined,
     ownerId: row.ownerId ?? undefined,
     dueDate: row.dueDate ?? undefined,
@@ -91,7 +92,8 @@ export function rowToClient(row: Schema['Client']['type']): Client {
 /** 欄位一律明確送出（沒有的送 null），清掉備註、下次聯絡等才會真的清掉雲端的值 */
 export function clientToFields(c: Client) {
   return {
-    personId: c.personId,
+    personId: c.personId ?? null,
+    name: c.name ?? null,
     statusId: c.statusId ?? null,
     ownerId: c.ownerId ?? null,
     dueDate: c.dueDate ?? null,

@@ -2,11 +2,11 @@ import { notifyLocalChange } from '../changeSignal';
 import { dirtyKey, getDB } from './db';
 import type { Client, ClientRepo } from '../types';
 
-/** 墓碑：只留同步需要的欄位，已移出客戶的備註不該繼續留在雲端 */
+/** 墓碑：只留同步需要的欄位，已移出客戶的名字與備註不該繼續留在雲端 */
 export function makeClientTombstone(c: Client, now: string): Client {
   return {
     id: c.id,
-    personId: c.personId,
+    ...(c.personId ? { personId: c.personId } : {}),
     done: false,
     createdAt: c.createdAt,
     updatedAt: now,
