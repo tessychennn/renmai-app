@@ -2,7 +2,7 @@ import { type ClientSchema, a, defineData } from '@aws-amplify/backend';
 
 // 共用資料，依 Cognito 群組授權（群組說明見 auth/resource.ts）：
 //   人脈、分組、客戶：admin 與 team 能讀寫
-//   待辦：admin、team、todo 能讀寫；待辦選項只有 admin 能寫，team 與 todo 唯讀
+//   待辦：admin、team、todo、tech 能讀寫；待辦選項只有 admin 能寫，其他唯讀
 //   產品進度：admin、team、tech 能讀寫；產品進度選項只有 admin 能寫，team 與 tech 唯讀
 // Amplify 會自動加上 createdAt / updatedAt（伺服器時間），所以 App 自己的時間戳
 // 另存為 clientCreatedAt / clientUpdatedAt，同步比對新舊用的是後者。
@@ -73,7 +73,7 @@ const schema = a.schema({
       clientUpdatedAt: a.string().required(),
       deletedAt: a.string(),
     })
-    .authorization((allow) => [allow.groups(['admin', 'team', 'todo'])]),
+    .authorization((allow) => [allow.groups(['admin', 'team', 'todo', 'tech'])]),
 
   // 產品進度（和技術長溝通的表格）：小項目掛在大項目底下。大項目、營運優先級、技術等級、狀態
   // 都是 ProgressOption 的編號（用字串存），改名、新增不用動任務。
@@ -95,7 +95,7 @@ const schema = a.schema({
     })
     .authorization((allow) => [allow.groups(['admin', 'team', 'tech'])]),
 
-  // 待辦的選項清單：team 與 todo 可讀，只有 admin 群組能寫（伺服器強制執行）。
+  // 待辦的選項清單：team、todo、tech 可讀，只有 admin 群組能寫（伺服器強制執行）。
   TaskOption: a
     .model({
       kind: a.string().required(),
@@ -105,7 +105,7 @@ const schema = a.schema({
       clientUpdatedAt: a.string().required(),
       deletedAt: a.string(),
     })
-    .authorization((allow) => [allow.group('admin'), allow.groups(['team', 'todo']).to(['read'])]),
+    .authorization((allow) => [allow.group('admin'), allow.groups(['team', 'todo', 'tech']).to(['read'])]),
 
   // 產品進度的選項（大項目、營運優先級、技術等級、狀態）：admin 能寫，team 與 tech 唯讀。
   // 用字串存 kind、顏色，值的範圍由 App 端把關。

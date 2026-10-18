@@ -25,9 +25,9 @@ describe('群組 → 能用的頁面', () => {
     expect(accessOf(['team'])).toEqual({ admin: false, people: true, todo: true, progress: true });
   });
 
-  it('tech 只有產品進度；tech 加 todo 多了待辦，仍然看不到人脈', () => {
-    expect(accessOf(['tech'])).toEqual({ ...NO_ACCESS, progress: true });
-    expect(accessOf(['tech', 'todo'])).toEqual({ ...NO_ACCESS, progress: true, todo: true });
+  it('tech 能用產品進度與待辦，看不到人脈與客戶；todo 只有待辦', () => {
+    expect(accessOf(['tech'])).toEqual({ ...NO_ACCESS, progress: true, todo: true });
+    expect(accessOf(['tech', 'todo'])).toEqual(accessOf(['tech'])); // 再加 todo 也一樣
     expect(accessOf(['todo'])).toEqual({ ...NO_ACCESS, todo: true });
   });
 
@@ -43,7 +43,7 @@ describe('群組 → 能用的頁面', () => {
 describe('身分快取', () => {
   it('寫了讀得回來；登出會清掉', () => {
     expect(cachedAccess()).toBeUndefined();
-    cacheAccess(['tech', 'todo']);
+    cacheAccess(['tech']);
     expect(cachedAccess()).toEqual({ ...NO_ACCESS, progress: true, todo: true });
     clearCachedRole();
     expect(cachedAccess()).toBeUndefined();
@@ -63,9 +63,9 @@ describe('身分快取', () => {
 
 describe('同步範圍與首頁', () => {
   it('同步範圍就是有權限的資料；首頁導到第一個能進的頁面', () => {
-    expect(syncScopeOf(accessOf(['tech', 'todo']))).toEqual({ people: false, todo: true, progress: true });
+    expect(syncScopeOf(accessOf(['tech']))).toEqual({ people: false, todo: true, progress: true });
     expect(homeRoute(accessOf(['team']))).toBe('/');
-    expect(homeRoute(accessOf(['tech', 'todo']))).toBe('/tasks');
     expect(homeRoute(accessOf(['tech']))).toBe('/progress');
+    expect(homeRoute(accessOf(['todo']))).toBe('/tasks');
   });
 });

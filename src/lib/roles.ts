@@ -3,8 +3,8 @@
 //
 //   admin  管理員：全部功能，並且是唯一能修改選項設定的人
 //   team   團隊成員：人脈記錄、客戶、待辦、產品進度
-//   tech   技術端：產品進度
-//   todo   待辦（可以和 tech 一起加給同一個帳號）
+//   tech   技術端：產品進度與待辦
+//   todo   只有待辦（給不需要產品進度的人）
 //
 // 一個帳號可以同時屬於多個群組，權限是各群組的合併。
 
@@ -26,7 +26,7 @@ export function accessOf(groups: readonly string[]): Access {
   return {
     admin,
     people: admin || team,
-    todo: admin || team || groups.includes('todo'),
+    todo: admin || team || groups.includes('todo') || groups.includes('tech'),
     progress: admin || team || groups.includes('tech'),
   };
 }
@@ -85,7 +85,7 @@ export function syncScopeOf(access: Access): { people: boolean; todo: boolean; p
 /** 這個身分第一個能進的頁面（首頁不能進時導到這裡） */
 export function homeRoute(access: Access): string {
   if (access.people) return '/';
-  if (access.todo) return '/tasks';
   if (access.progress) return '/progress';
+  if (access.todo) return '/tasks';
   return '/';
 }
