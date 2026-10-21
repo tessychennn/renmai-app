@@ -83,7 +83,7 @@ export default function CloudSection({ cardClass }: { cardClass: string }) {
       <ConfirmSheet
         open={confirmSignOut}
         title="登出？"
-        message="這支手機上的資料會保留，但登出後不會再同步。"
+        message="登出後會回到登入畫面，要重新登入才能繼續使用。這支手機上的資料會保留，重新登入後會繼續同步。"
         actions={[{ label: '登出', danger: true, onClick: () => void signOutAndReload() }]}
         onClose={() => setConfirmSignOut(false)}
       />

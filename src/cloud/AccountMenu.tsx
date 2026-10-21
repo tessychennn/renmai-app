@@ -39,7 +39,7 @@ export default function AccountMenu() {
       <ConfirmSheet
         open={open}
         title="帳號"
-        message={`${email ? `登入帳號：${email}。` : ''}登出後這支手機上的資料會保留，但不會再同步。`}
+        message={`${email ? `登入帳號：${email}。` : ''}登出後會回到登入畫面，要重新登入才能繼續使用。這支手機上的資料會保留，重新登入後會繼續同步。`}
         actions={[{ label: '登出', danger: true, onClick: () => void signOutAndReload() }]}
         onClose={() => setOpen(false)}
       />
