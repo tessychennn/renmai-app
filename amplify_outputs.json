@@ -331,7 +331,14 @@
               "name": "personId",
               "isArray": false,
               "type": "String",
-              "isRequired": true,
+              "isRequired": false,
+              "attributes": []
+            },
+            "name": {
+              "name": "name",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
               "attributes": []
             },
             "statusId": {
@@ -593,7 +600,8 @@
                     "groups": [
                       "admin",
                       "team",
-                      "todo"
+                      "todo",
+                      "tech"
                     ],
                     "operations": [
                       "create",
@@ -870,7 +878,8 @@
                     ],
                     "groups": [
                       "team",
-                      "todo"
+                      "todo",
+                      "tech"
                     ]
                   }
                 ]
