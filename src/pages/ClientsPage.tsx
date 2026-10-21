@@ -12,6 +12,8 @@ import type { Client } from '../data/types';
 import { useClientData } from '../hooks/useClientData';
 import {
   buildClient,
+  CLIENT_SORT_LABEL,
+  clientLevelOf,
   clientName,
   clientStatusOf,
   editClient,
@@ -24,15 +26,28 @@ import {
   type ClientFilter,
   type ClientInput,
   type ClientPatch,
+  type ClientSort,
 } from '../lib/clients';
 import { STATUS_BADGE } from '../lib/statusTone';
 import { dueLabel, dueState, optionName, todayStr } from '../lib/tasks';
-import { CLIENT_STATUSES } from '../text/clients';
+import { CLIENT_LEVELS, CLIENT_STATUSES } from '../text/clients';
 
 type View = 'open' | 'done';
 
 const GRID =
-  'grid grid-cols-[1.5rem_minmax(0,1fr)_3.6rem_4rem] items-center gap-x-1 px-2 text-sm md:grid-cols-[1.5rem_minmax(0,1fr)_6.5rem_6rem_6.5rem] md:gap-x-2 md:px-3 md:text-base';
+  'grid grid-cols-[1.5rem_minmax(0,1fr)_2.9rem_3.6rem_4rem] items-center gap-x-1 px-2 text-sm md:grid-cols-[1.5rem_minmax(0,1fr)_4.5rem_6.5rem_6rem_6.5rem] md:gap-x-2 md:px-3 md:text-base';
+
+const SORT_KEY = 'renmai.clientSort';
+
+function loadSort(): ClientSort {
+  try {
+    const saved = localStorage.getItem(SORT_KEY);
+    if (saved === 'level' || saved === 'due') return saved;
+  } catch {
+    // 拿不到就用預設
+  }
+  return 'level'; // 預設重要的在上面
+}
 
 const chip =
   'shrink-0 whitespace-nowrap rounded-full border-[0.5px] px-3 py-1.5 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink';
@@ -53,6 +68,7 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
 export default function ClientsPage() {
   const { loading, clients, persons, options, reload } = useClientData();
   const [view, setView] = useState<View>('open');
+  const [sort, setSort] = useState<ClientSort>(loadSort);
   const [filter, setFilter] = useState<ClientFilter>({});
   // sheet: { client } = 編輯；{} = 新增
   const [sheet, setSheet] = useState<{ client?: Client } | null>(null);
@@ -78,8 +94,8 @@ export default function ClientsPage() {
   const filtered = useMemo(() => filterClients(clients, filter), [clients, filter]);
   const open = useMemo(() => {
     const current = new Map(filtered.map((c) => [c.id, c]));
-    return sortClients(filtered.filter((c) => !c.done).map((c) => frozen.get(c.id) ?? c)).map((c) => current.get(c.id)!);
-  }, [filtered, frozen]);
+    return sortClients(filtered.filter((c) => !c.done).map((c) => frozen.get(c.id) ?? c), sort).map((c) => current.get(c.id)!);
+  }, [filtered, frozen, sort]);
   const done = useMemo(
     () =>
       filtered
@@ -91,6 +107,16 @@ export default function ClientsPage() {
   const changeFilter = (patch: Partial<ClientFilter>) => {
     setFilter((f) => ({ ...f, ...patch }));
     setFrozen(new Map());
+  };
+
+  const changeSort = (next: ClientSort) => {
+    setFrozen(new Map());
+    setSort(next);
+    try {
+      localStorage.setItem(SORT_KEY, next);
+    } catch {
+      // 存不了只在這次生效
+    }
   };
 
   const patch = async (client: Client, change: ClientPatch) => {
@@ -218,6 +244,26 @@ export default function ClientsPage() {
                 </Chip>
               ))}
             </div>
+            {view === 'open' && (
+              <div role="group" aria-label="排序" className="flex items-center gap-2 text-sm text-ink-2">
+                <span className="shrink-0">排序</span>
+                <div className="flex rounded-full bg-ground p-0.5">
+                  {(Object.keys(CLIENT_SORT_LABEL) as ClientSort[]).map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      aria-pressed={sort === s}
+                      onClick={() => changeSort(s)}
+                      className={`rounded-full px-3 py-1 whitespace-nowrap focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink ${
+                        sort === s ? 'bg-white font-medium text-ink shadow-[0_1px_3px_rgba(0,0,0,0.12)]' : ''
+                      }`}
+                    >
+                      {CLIENT_SORT_LABEL[s]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </header>
@@ -230,6 +276,7 @@ export default function ClientsPage() {
             <div aria-hidden="true" className={`${GRID} border-b-[0.5px] border-hairline py-1.5 text-xs text-ink-2`}>
               <span />
               <span>名稱</span>
+              <span>等級</span>
               <span>負責人</span>
               <span>狀態</span>
               <span className="hidden text-center md:block">下次聯絡</span>
@@ -238,6 +285,9 @@ export default function ClientsPage() {
               {list.map((c) => {
                 const status = clientStatusOf(c.statusId)?.name;
                 const color = clientStatusOf(c.statusId)?.color;
+                const level = clientLevelOf(c.level);
+                const levels =
+                  c.level && !level ? [...CLIENT_LEVELS, { id: c.level, name: '（已刪除）' }] : CLIENT_LEVELS;
                 const owner = optionName(options.members, c.ownerId);
                 const name = nameOf(c);
                 const members =
@@ -279,6 +329,16 @@ export default function ClientsPage() {
                         </span>
                       )}
                     </button>
+
+                    <InlineSelect
+                      ariaLabel={`「${name}」的等級`}
+                      value={c.level ?? ''}
+                      options={[{ value: '', label: '未設定' }, ...levels.map((l) => ({ value: l.id, label: l.name }))]}
+                      text={level?.name ?? (c.level ? '（已刪除）' : '—')}
+                      tone={level ? 'normal' : 'faint'}
+                      badge={level && STATUS_BADGE[level.color]}
+                      onChange={(lv) => void patch(c, { level: lv })}
+                    />
 
                     <InlineSelect
                       ariaLabel={`「${name}」的負責人`}

@@ -43,6 +43,8 @@ const schema = a.schema({
     .model({
       personId: a.string(),
       name: a.string(),
+      // 等級（重要／潛在）：App 端固定的代號
+      level: a.string(),
       statusId: a.string(),
       ownerId: a.string(),
       dueDate: a.string(),

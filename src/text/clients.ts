@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────
-// 「客戶」頁的狀態清單（也是人物卡上標籤與長按選單的選項）。
+// 「客戶」頁的狀態清單（也是人物卡上標籤與長按選單的選項），以及客戶的「等級」清單。
 //
 // 想改狀態的名稱：只改引號裡面的 name（例如把「後續處理」改成別的字）。
 // 想改順序：調整每一行的位置；列表上的篩選鈕、下拉選單都依這個順序。
@@ -17,6 +17,12 @@ export interface ClientStatus {
   name: string;
   color: StatusColor;
 }
+
+/** 客戶的等級（輕重緩急）。**排在前面的越重要**：依「重要等級」排序時，排越前面的客戶越上面。 */
+export const CLIENT_LEVELS: readonly ClientStatus[] = [
+  { id: 'important', name: '重要', color: 'yellow' },
+  { id: 'potential', name: '潛在', color: 'gray' },
+];
 
 export const CLIENT_STATUSES: readonly ClientStatus[] = [
   { id: 'need-contact', name: '需聯繫', color: 'red' },

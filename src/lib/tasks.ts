@@ -90,18 +90,43 @@ export function optionUsage(tasks: Task[], option: TaskOption): number {
 
 const NO_DATE = '9999-99-99';
 
-/** 待辦排序：Deadline 近的在前（沒有的最後），再依優先級，再依建立時間 */
-export function sortBoard(tasks: Task[], priorities: TaskOption[]): Task[] {
-  const priIndex = (t: Task) => {
-    const i = priorities.findIndex((p) => p.id === t.priorityId);
+export type TaskSort = 'due' | 'priority' | 'status' | 'created';
+
+export const TASK_SORT_LABEL: Record<TaskSort, string> = {
+  due: 'Deadline',
+  priority: '優先級',
+  status: '狀態',
+  created: '最新建立',
+};
+
+/**
+ * 待辦排序（在每個分類區塊內）：
+ * - due（預設）：Deadline 近的在前（沒有的最後），再依優先級，再依建立時間
+ * - priority：優先級（清單第一個最高；沒填的最後），再依 Deadline
+ * - status：狀態清單的順序（沒填的最後），再依 Deadline
+ * - created：最新建立的在前
+ */
+export function sortBoard(
+  tasks: Task[],
+  priorities: TaskOption[],
+  sort: TaskSort = 'due',
+  statuses: TaskOption[] = []
+): Task[] {
+  const rankIn = (list: TaskOption[], id: string | undefined) => {
+    const i = list.findIndex((o) => o.id === id);
     return i < 0 ? 99 : i;
   };
-  return [...tasks].sort(
-    (a, b) =>
-      (a.dueDate ?? NO_DATE).localeCompare(b.dueDate ?? NO_DATE) ||
-      priIndex(a) - priIndex(b) ||
-      a.createdAt.localeCompare(b.createdAt)
-  );
+  const pri = (t: Task) => rankIn(priorities, t.priorityId);
+  const status = (t: Task) => rankIn(statuses, t.statusId);
+  const due = (t: Task) => t.dueDate ?? NO_DATE;
+  const byCreated = (a: Task, b: Task) => a.createdAt.localeCompare(b.createdAt);
+  const compare = {
+    due: (a: Task, b: Task) => due(a).localeCompare(due(b)) || pri(a) - pri(b) || byCreated(a, b),
+    priority: (a: Task, b: Task) => pri(a) - pri(b) || due(a).localeCompare(due(b)) || byCreated(a, b),
+    status: (a: Task, b: Task) => status(a) - status(b) || due(a).localeCompare(due(b)) || byCreated(a, b),
+    created: (a: Task, b: Task) => byCreated(b, a),
+  }[sort];
+  return [...tasks].sort(compare);
 }
 
 /**
@@ -112,12 +137,16 @@ export function sortBoard(tasks: Task[], priorities: TaskOption[]): Task[] {
 export function sortBoardStable(
   tasks: Task[],
   priorities: TaskOption[],
-  frozen: ReadonlyMap<string, Task>
+  frozen: ReadonlyMap<string, Task>,
+  sort: TaskSort = 'due',
+  statuses: TaskOption[] = []
 ): Task[] {
   const current = new Map(tasks.map((t) => [t.id, t]));
   return sortBoard(
     tasks.map((t) => frozen.get(t.id) ?? t),
-    priorities
+    priorities,
+    sort,
+    statuses
   ).map((t) => current.get(t.id)!);
 }
 

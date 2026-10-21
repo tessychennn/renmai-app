@@ -27,12 +27,24 @@ import {
   type InlinePatch,
   type TaskFilter,
   type TaskInput,
+  type TaskSort,
 } from '../lib/tasks';
 
 type View = 'board' | 'done' | 'calendar';
 
 const VIEW_KEY = 'renmai.taskView';
 const LAST_CATEGORY_KEY = 'renmai.taskLastCategory';
+const SORT_KEY = 'renmai.taskSort';
+
+function loadSort(): TaskSort {
+  try {
+    const saved = localStorage.getItem(SORT_KEY);
+    if (saved === 'due' || saved === 'priority' || saved === 'status' || saved === 'created') return saved;
+  } catch {
+    // 拿不到就用預設
+  }
+  return 'due'; // 預設依 Deadline
+}
 
 function loadView(): View {
   try {
@@ -56,6 +68,7 @@ export default function TasksPage() {
   const { loading, tasks, options, reload } = useTaskData();
   const role = useRole();
   const [view, setView] = useState<View>(loadView);
+  const [sort, setSort] = useState<TaskSort>(loadSort);
   const [filter, setFilter] = useState<TaskFilter>({});
   const [sheet, setSheet] = useState<{ task?: Task } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Task | null>(null);
@@ -81,8 +94,8 @@ export default function TasksPage() {
 
   const filtered = useMemo(() => filterTasks(tasks, filter), [tasks, filter]);
   const open = useMemo(
-    () => sortBoardStable(filtered.filter((t) => !t.done), options.priorities, frozen),
-    [filtered, options.priorities, frozen]
+    () => sortBoardStable(filtered.filter((t) => !t.done), options.priorities, frozen, sort, options.statuses),
+    [filtered, options.priorities, options.statuses, frozen, sort]
   );
   const done = useMemo(() => sortDone(filtered.filter((t) => t.done)), [filtered]);
 
@@ -100,6 +113,16 @@ export default function TasksPage() {
     setFrozen((prev) => (prev.has(task.id) ? prev : new Map(prev).set(task.id, task)));
     await taskRepo.save(patchTask(task, change));
     reload();
+  };
+
+  const changeSort = (next: TaskSort) => {
+    setFrozen(new Map());
+    setSort(next);
+    try {
+      localStorage.setItem(SORT_KEY, next);
+    } catch {
+      // 存不了只在這次生效
+    }
   };
 
   const changeView = (next: View) => {
@@ -186,7 +209,13 @@ export default function TasksPage() {
             ))}
           </div>
 
-          <TaskFilters options={options} filter={filter} onChange={changeFilter} />
+          <TaskFilters
+            options={options}
+            filter={filter}
+            onChange={changeFilter}
+            sort={view === 'board' ? sort : undefined}
+            onSort={view === 'board' ? changeSort : undefined}
+          />
         </div>
       </header>
 

@@ -1,5 +1,5 @@
-import type { SplitOptions, TaskFilter } from '../../lib/tasks';
-import { UNASSIGNED } from '../../lib/tasks';
+import type { SplitOptions, TaskFilter, TaskSort } from '../../lib/tasks';
+import { TASK_SORT_LABEL, UNASSIGNED } from '../../lib/tasks';
 
 const chip =
   'shrink-0 whitespace-nowrap rounded-full border-[0.5px] px-3 py-1.5 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink';
@@ -25,10 +25,15 @@ export default function TaskFilters({
   options,
   filter,
   onChange,
+  sort,
+  onSort,
 }: {
   options: SplitOptions;
   filter: TaskFilter;
   onChange: (patch: Partial<TaskFilter>) => void;
+  /** 有給排序才顯示排序列（只有待辦看板需要） */
+  sort?: TaskSort;
+  onSort?: (sort: TaskSort) => void;
 }) {
   const toggleOwner = (id: string) => onChange({ ownerId: filter.ownerId === id ? undefined : id });
   const toggleCategory = (id: string) => onChange({ categoryId: filter.categoryId === id ? undefined : id });
@@ -58,6 +63,26 @@ export default function TaskFilters({
           </Chip>
         ))}
       </div>
+      {sort && onSort && (
+        <div role="group" aria-label="排序" className="flex items-center gap-2 text-sm text-ink-2">
+          <span className="shrink-0">排序</span>
+          <div className="flex overflow-x-auto rounded-full bg-ground p-0.5 [scrollbar-width:none]">
+            {(Object.keys(TASK_SORT_LABEL) as TaskSort[]).map((s) => (
+              <button
+                key={s}
+                type="button"
+                aria-pressed={sort === s}
+                onClick={() => onSort(s)}
+                className={`rounded-full px-3 py-1 whitespace-nowrap focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink ${
+                  sort === s ? 'bg-white font-medium text-ink shadow-[0_1px_3px_rgba(0,0,0,0.12)]' : ''
+                }`}
+              >
+                {TASK_SORT_LABEL[s]}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

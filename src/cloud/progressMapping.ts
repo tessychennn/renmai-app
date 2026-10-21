@@ -77,6 +77,7 @@ export function rowToClient(row: Schema['Client']['type']): Client {
     id: row.id,
     personId: row.personId ?? undefined,
     name: row.name ?? undefined,
+    level: row.level ?? undefined,
     statusId: row.statusId ?? undefined,
     ownerId: row.ownerId ?? undefined,
     dueDate: row.dueDate ?? undefined,
@@ -94,6 +95,7 @@ export function clientToFields(c: Client) {
   return {
     personId: c.personId ?? null,
     name: c.name ?? null,
+    level: c.level ?? null,
     statusId: c.statusId ?? null,
     ownerId: c.ownerId ?? null,
     dueDate: c.dueDate ?? null,

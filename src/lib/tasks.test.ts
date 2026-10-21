@@ -137,6 +137,22 @@ describe('排序', () => {
     ]);
   });
 
+  it('待辦的排序選項：預設是 Deadline；也可以依優先級、狀態、最新建立', () => {
+    const statuses = [opt('status', 's1', '未開始', 0), opt('status', 's2', '進行中', 1)];
+    const tasks = [
+      task({ id: 'a', dueDate: '2026-10-20', priorityId: 'p1', statusId: 's2', createdAt: '2026-09-01T00:00:00.000Z' }),
+      task({ id: 'b', dueDate: '2026-10-08', priorityId: 'p2', statusId: 's1', createdAt: '2026-09-03T00:00:00.000Z' }),
+      task({ id: 'c', priorityId: 'p1', createdAt: '2026-09-02T00:00:00.000Z' }),
+    ];
+    const ids = (sort?: Parameters<typeof sortBoard>[2]) =>
+      sortBoard(tasks, priorities, sort, statuses).map((t) => t.id);
+    expect(ids()).toEqual(['b', 'a', 'c']); // 預設：Deadline（沒有的最後）
+    expect(ids('due')).toEqual(ids());
+    expect(ids('priority')).toEqual(['a', 'c', 'b']); // 高優先在前；同級看 Deadline
+    expect(ids('status')).toEqual(['b', 'a', 'c']); // 未開始、進行中，沒填的最後
+    expect(ids('created')).toEqual(['b', 'c', 'a']); // 最新建立的在前
+  });
+
   it('完成區：最近完成的在前', () => {
     const tasks = [
       task({ id: 'a', done: true, doneAt: '2026-10-01' }),

@@ -133,6 +133,8 @@ export interface Client {
   personId?: string;
   /** 在客戶頁直接新增的才有；有連結人物的客戶名字讀人物資料 */
   name?: string;
+  /** 等級（重要／潛在）：src/text/clients.ts 裡的等級編號；沒設定就排在最後 */
+  level?: string;
   /** 狀態：src/text/clients.ts 裡的狀態編號 */
   statusId?: string;
   /** 負責人：待辦選項裡 kind = 'member' 的那一種 */

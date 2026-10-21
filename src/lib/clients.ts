@@ -2,7 +2,7 @@ import { clientRepo, personRepo, syncLocal, taskOptionRepo, taskRepo } from '../
 import { clientIdOf } from '../data/clientId';
 import { personIdOfTask } from '../data/prospectId';
 import type { Client, Person, TaskOption } from '../data/types';
-import { CLIENT_STATUSES, type ClientStatus } from '../text/clients';
+import { CLIENT_LEVELS, CLIENT_STATUSES, type ClientStatus } from '../text/clients';
 import type { StatusColor } from './statusTone';
 import { splitOptions } from './tasks';
 
@@ -14,6 +14,9 @@ export { clientIdOf };
 
 export const clientStatusOf = (id: string | undefined): ClientStatus | undefined =>
   id ? CLIENT_STATUSES.find((s) => s.id === id) : undefined;
+
+export const clientLevelOf = (id: string | undefined): ClientStatus | undefined =>
+  id ? CLIENT_LEVELS.find((l) => l.id === id) : undefined;
 
 /** 客戶的名字：自己存的優先；從人脈記錄來的讀人物資料 */
 export function clientName(client: Client, persons: ReadonlyMap<string, Pick<Person, 'displayName'>>): string {
@@ -89,6 +92,7 @@ export function clientChip(client: Client): { label: string; tone: ChipTone } {
 
 export interface NewClientInput {
   name: string;
+  level?: string;
   statusId?: string;
   ownerId?: string;
   dueDate?: string;
@@ -106,6 +110,7 @@ export function newStandaloneClient(input: NewClientInput, now = new Date()): Cl
   return {
     id: `client-${crypto.randomUUID()}`,
     name: input.name.trim(),
+    level: clean(input.level),
     statusId: clean(input.statusId),
     ownerId: clean(input.ownerId),
     dueDate: clean(input.dueDate),
@@ -135,22 +140,41 @@ export function filterClients(clients: Client[], filter: ClientFilter): Client[]
 
 const NO_DATE = '9999-99-99';
 
-/** 下次聯絡近的在前（沒有日期的最後），同日再依狀態清單的順序，最後依建立時間 */
-export function sortClients(clients: Client[]): Client[] {
-  const rank = (c: Client) => {
+export type ClientSort = 'level' | 'due';
+
+export const CLIENT_SORT_LABEL: Record<ClientSort, string> = {
+  level: '重要等級',
+  due: '下次聯絡',
+};
+
+/**
+ * 客戶排序：
+ * - level（預設）：等級排前面的在上面（重要在潛在上面，沒設定的最後），同級再依下次聯絡（沒有日期的最後）、
+ *   狀態清單的順序、建立時間
+ * - due：下次聯絡近的在前（沒有日期的最後），同日再依等級、狀態、建立時間
+ */
+export function sortClients(clients: Client[], sort: ClientSort = 'level'): Client[] {
+  const levelRank = (c: Client) => {
+    const i = CLIENT_LEVELS.findIndex((l) => l.id === c.level);
+    return i < 0 ? 99 : i;
+  };
+  const statusRank = (c: Client) => {
     const i = CLIENT_STATUSES.findIndex((s) => s.id === c.statusId);
     return i < 0 ? 99 : i;
   };
-  return [...clients].sort(
-    (a, b) =>
-      (a.dueDate ?? NO_DATE).localeCompare(b.dueDate ?? NO_DATE) ||
-      rank(a) - rank(b) ||
-      a.createdAt.localeCompare(b.createdAt)
-  );
+  const due = (c: Client) => c.dueDate ?? NO_DATE;
+  const compare =
+    sort === 'due'
+      ? (a: Client, b: Client) =>
+          due(a).localeCompare(due(b)) || levelRank(a) - levelRank(b) || statusRank(a) - statusRank(b)
+      : (a: Client, b: Client) =>
+          levelRank(a) - levelRank(b) || due(a).localeCompare(due(b)) || statusRank(a) - statusRank(b);
+  return [...clients].sort((a, b) => compare(a, b) || a.createdAt.localeCompare(b.createdAt));
 }
 
 /** 列上直接修改的欄位。空字串代表清掉。 */
 export interface ClientPatch {
+  level?: string;
   statusId?: string;
   ownerId?: string;
   dueDate?: string;
@@ -158,7 +182,7 @@ export interface ClientPatch {
 
 export function patchClient(client: Client, patch: ClientPatch, now = new Date()): Client {
   const next: Client = { ...client, updatedAt: now.toISOString() };
-  for (const key of ['statusId', 'ownerId', 'dueDate'] as const) {
+  for (const key of ['level', 'statusId', 'ownerId', 'dueDate'] as const) {
     const value = patch[key];
     if (value === undefined) continue;
     if (value) next[key] = value;
@@ -170,6 +194,7 @@ export function patchClient(client: Client, patch: ClientPatch, now = new Date()
 export interface ClientInput {
   /** 只有自己存名字的客戶（沒有連結人脈記錄）能改名；連結的客戶名字跟著人物 */
   name?: string;
+  level?: string;
   statusId?: string;
   ownerId?: string;
   dueDate?: string;
@@ -179,6 +204,7 @@ export interface ClientInput {
 export function editClient(client: Client, input: ClientInput, now = new Date()): Client {
   const next: Client = {
     ...client,
+    level: clean(input.level),
     statusId: clean(input.statusId),
     ownerId: clean(input.ownerId),
     dueDate: clean(input.dueDate),

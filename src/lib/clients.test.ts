@@ -32,7 +32,7 @@ import {
   UNASSIGNED,
 } from './clients';
 import { splitOptions } from './tasks';
-import { CLIENT_STATUSES } from '../text/clients';
+import { CLIENT_LEVELS, CLIENT_STATUSES } from '../text/clients';
 
 function person(overrides: Partial<Person> = {}): Person {
   return {
@@ -192,14 +192,37 @@ describe('客戶頁的篩選、排序與修改', () => {
     expect(filterClients(list, { ownerId: UNASSIGNED }).map((c) => c.personId)).toEqual(['bb']);
   });
 
-  it('排序：下次聯絡近的在前（沒有的最後），同日依狀態順序', () => {
+  it('排序（依下次聯絡）：近的在前（沒有的最後），同日依等級、狀態順序', () => {
     const list = [
       client('a', { statusId: 'contacting' }),
       client('bb', { dueDate: '2026-10-20', statusId: 'contacting' }),
       client('ccc', { dueDate: '2026-10-10' }),
       client('dddd', { dueDate: '2026-10-10', statusId: 'need-contact' }),
+      client('eeeee', { dueDate: '2026-10-10', level: 'important' }),
     ];
-    expect(sortClients(list).map((c) => c.personId)).toEqual(['dddd', 'ccc', 'bb', 'a']);
+    expect(sortClients(list, 'due').map((c) => c.personId)).toEqual(['eeeee', 'dddd', 'ccc', 'bb', 'a']);
+  });
+
+  it('排序（預設依重要等級）：重要在潛在上面，沒設定的最後；同級再依下次聯絡', () => {
+    const list = [
+      client('a'), // 沒設定等級
+      client('bb', { level: 'potential', dueDate: '2026-10-05' }),
+      client('ccc', { level: 'important', dueDate: '2026-10-20' }),
+      client('dddd', { level: 'important', dueDate: '2026-10-10' }),
+      client('eeeee', { level: 'potential' }),
+    ];
+    expect(sortClients(list).map((c) => c.personId)).toEqual(['dddd', 'ccc', 'bb', 'eeeee', 'a']);
+    expect(sortClients(list, 'level')).toEqual(sortClients(list));
+  });
+
+  it('等級：清單只有重要與潛在；可以在列上改、改成未設定、在新增時帶上', () => {
+    expect(CLIENT_LEVELS.map((l) => l.name)).toEqual(['重要', '潛在']);
+    const c = client('a', { level: 'potential' });
+    expect(patchClient(c, { level: 'important' }).level).toBe('important');
+    expect('level' in patchClient(c, { level: '' })).toBe(false);
+    expect(editClient(c, { level: 'important', statusId: 'contacting' }).level).toBe('important');
+    expect(newStandaloneClient({ name: '某某公司', level: 'important' }, NOW).level).toBe('important');
+    expect(newStandaloneClient({ name: '某某公司' }, NOW).level).toBeUndefined();
   });
 
   it('列上修改：空字串代表清掉，沒提到的欄位不動', () => {

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import type { Client, Person } from '../../data/types';
 import type { ClientInput } from '../../lib/clients';
 import type { SplitOptions } from '../../lib/tasks';
-import { CLIENT_STATUSES } from '../../text/clients';
+import { CLIENT_LEVELS, CLIENT_STATUSES } from '../../text/clients';
 
 const fieldClass =
   'w-full rounded-xl border-[0.5px] border-hairline bg-white px-3 py-2.5 text-ink placeholder:text-ink-2 focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink';
@@ -50,6 +50,7 @@ export default function ClientSheet({
   const standalone = !client?.personId;
   const [typedName, setTypedName] = useState(client?.name ?? '');
   const [picked, setPicked] = useState<Person | null>(null);
+  const [level, setLevel] = useState(client?.level ?? '');
   const [statusId, setStatusId] = useState(client?.statusId ?? CLIENT_STATUSES[0]?.id ?? '');
   const [ownerId, setOwnerId] = useState(client?.ownerId ?? '');
   const [dueDate, setDueDate] = useState(client?.dueDate ?? '');
@@ -91,6 +92,7 @@ export default function ClientSheet({
       await onSave({
         name: picked ? undefined : typedName,
         personId: picked?.id,
+        level,
         statusId,
         ownerId,
         dueDate,
@@ -177,6 +179,19 @@ export default function ClientSheet({
           )}
 
           <div className="grid grid-cols-2 gap-3">
+            <Field label="等級">
+              <select value={level} onChange={(e) => setLevel(e.target.value)} className={fieldClass}>
+                <option value="">未設定</option>
+                {(client?.level && !CLIENT_LEVELS.some((l) => l.id === client.level)
+                  ? [...CLIENT_LEVELS, { id: client.level, name: '（已刪除的選項）' }]
+                  : CLIENT_LEVELS
+                ).map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
             <Field label="狀態">
               <select value={statusId} onChange={(e) => setStatusId(e.target.value)} className={fieldClass}>
                 <option value="">未設定</option>
@@ -187,6 +202,9 @@ export default function ClientSheet({
                 ))}
               </select>
             </Field>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
             <Field label="負責人">
               <select value={ownerId} onChange={(e) => setOwnerId(e.target.value)} className={fieldClass}>
                 <option value="">未指派</option>
@@ -197,11 +215,10 @@ export default function ClientSheet({
                 ))}
               </select>
             </Field>
+            <Field label="下次聯絡">
+              <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className={fieldClass} />
+            </Field>
           </div>
-
-          <Field label="下次聯絡">
-            <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className={fieldClass} />
-          </Field>
 
           <Field label="備註">
             <textarea
