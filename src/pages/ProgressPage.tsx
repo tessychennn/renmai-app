@@ -16,7 +16,9 @@ import {
   doneStatusIds,
   editItem,
   filterItems,
+  moveItem,
   newItem,
+  nextSortOrder,
   patchItem,
   reopenItem,
   sortItemsStable,
@@ -37,7 +39,7 @@ const LAST_PROJECT_KEY = 'renmai.progressLastProject';
 function loadSort(): ProgressSort {
   try {
     const saved = localStorage.getItem(SORT_KEY);
-    if (saved === 'ops' || saved === 'tech' || saved === 'due') return saved;
+    if (saved === 'ops' || saved === 'tech' || saved === 'due' || saved === 'manual') return saved;
   } catch {
     // 拿不到就用預設
   }
@@ -120,12 +122,29 @@ export default function ProgressPage() {
     reload();
   };
 
+  /** 拖曳調整順序：之後自動切到「手動排序」，才看得到自己排的順序 */
+  const reorder = async (displayed: ProgressItem[], activeId: string, overId: string) => {
+    const changed = moveItem(displayed, activeId, overId);
+    if (changed.length === 0) return;
+    await progressRepo.saveMany(changed);
+    setFrozen(new Map());
+    setSort('manual');
+    try {
+      localStorage.setItem(SORT_KEY, 'manual');
+    } catch {
+      // 存不了只在這次生效
+    }
+    reload();
+  };
+
   const save = async (input: ProgressInput, keepAdding: boolean) => {
     if (sheet?.item) {
       await progressRepo.save(editItem(sheet.item, input, opts));
       setSheet(null);
     } else {
-      await progressRepo.save(newItem(input, role.email, opts));
+      // 新增的放在同一個大項目的最後面（手動排序時就在最下面）
+      const created = newItem(input, role.email, opts);
+      await progressRepo.save({ ...created, sortOrder: nextSortOrder(items, input.projectId) });
       try {
         localStorage.setItem(LAST_PROJECT_KEY, input.projectId);
       } catch {
@@ -228,11 +247,13 @@ export default function ProgressPage() {
             <ProgressBoard
               items={open}
               opts={opts}
+              draggable
               today={today}
               emptyText={emptyFor(T.emptyOpen)}
               onToggle={(i) => void toggle(i)}
               onOpen={(i) => setSheet({ item: i })}
               onPatch={(i, change) => void patch(i, change)}
+              onReorder={(group, a, b) => void reorder(group, a, b)}
             />
           </>
         ) : (

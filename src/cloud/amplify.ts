@@ -182,6 +182,11 @@ const notDeployed = (what: string) =>
   '如果已經換過 amplify_outputs.json 並 push，請等部署完成後，把 App 完全關掉再開；' +
   '還沒換的話請先下載新檔。手機上的資料都還在，更新後會自動同步。';
 
+const fieldsNotDeployed = (what: string) =>
+  `這支手機上的 App（版本 ${__APP_VERSION__}）用的連線設定還不含「${what}」欄位。` +
+  '如果已經換過 amplify_outputs.json 並 push，請等部署完成後，把 App 完全關掉再開；' +
+  '還沒換的話請先下載新檔。手機上的資料都還在，更新後會自動同步。';
+
 const PROGRESS_NOT_DEPLOYED = notDeployed('產品進度');
 const CLIENTS_NOT_DEPLOYED = notDeployed('客戶');
 
@@ -403,7 +408,15 @@ export function createRemoteStore(): RemoteStore {
 
     async putClient(c) {
       if (!backendSupportsClients()) throw new Error(CLIENTS_NOT_DEPLOYED);
-      const fields = clientToFields(c);
+      let fields = clientToFields(c);
+      const clientFields = introspectedModels()?.Client?.fields;
+      if (!clientFields?.level || !clientFields?.name) {
+        // 舊的連線設定不認得等級與名字欄位：硬傳會被默默丟掉、本機卻以為已經同步。
+        // 有用到這些欄位的客戶先不上傳（標記留著，後端更新後自動補傳）；沒有的照常上傳，不帶新欄位。
+        if (c.level || c.name) throw new Error(fieldsNotDeployed('客戶的等級與名字'));
+        const { level: _level, name: _name, ...rest } = fields;
+        fields = rest as typeof fields;
+      }
       try {
         const existing = await client.models.Client.get({ id: c.id });
         assertOk(existing.errors);
@@ -418,7 +431,13 @@ export function createRemoteStore(): RemoteStore {
 
     async putProgress(i) {
       if (!backendSupportsProgress()) throw new Error(PROGRESS_NOT_DEPLOYED);
-      const fields = progressToFields(i);
+      let fields = progressToFields(i);
+      if (!introspectedModels()?.ProgressItem?.fields?.sortOrder) {
+        // 舊的連線設定不認得手動排序欄位：有排過順序的項目先不上傳，其他照常上傳
+        if (i.sortOrder !== undefined) throw new Error(fieldsNotDeployed('產品進度的手動排序'));
+        const { sortOrder: _sortOrder, ...rest } = fields;
+        fields = rest as typeof fields;
+      }
       try {
         const existing = await client.models.ProgressItem.get({ id: i.id });
         assertOk(existing.errors);

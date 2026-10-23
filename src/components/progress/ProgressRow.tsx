@@ -1,3 +1,5 @@
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import type { ProgressItem, ProgressOption } from '../../data/types';
 import {
   colorOf,
@@ -13,16 +15,17 @@ import { PROGRESS_TEXT as T } from '../../text/productProgress';
 import { InlineDate, InlineSelect } from '../tasks/InlineFields';
 
 /**
- * 一列的欄位：✓、項目、營運優先級、技術等級、狀態；寬一點的畫面再多目標日期。
+ * 一列的欄位：拖曳把手、✓、項目、營運優先級、技術等級、狀態；寬一點的畫面再多目標日期。
  * 窄的時候目標日期改放在項目名稱下面一行小字。
  * 標題列與每一列共用，欄位才對得整齊。
  */
 export const PROGRESS_GRID =
-  'grid grid-cols-[1.5rem_minmax(0,1fr)_2.7rem_3.1rem_4rem] items-center gap-x-1 px-2 text-sm @md:grid-cols-[1.5rem_minmax(0,1fr)_5rem_5.5rem_5.5rem_5.5rem] @md:gap-x-2 @md:px-3 @md:text-base';
+  'grid grid-cols-[1rem_1.5rem_minmax(0,1fr)_2.7rem_3.1rem_4rem] items-center gap-x-1 px-2 text-sm @md:grid-cols-[1rem_1.5rem_minmax(0,1fr)_5rem_5.5rem_5.5rem_5.5rem] @md:gap-x-2 @md:px-3 @md:text-base';
 
 export function ProgressHeader() {
   return (
     <div aria-hidden="true" className={`${PROGRESS_GRID} border-b-[0.5px] border-hairline py-1.5 text-xs text-ink-2`}>
+      <span />
       <span />
       <span>{T.colName}</span>
       <span>{T.colOps}</span>
@@ -44,6 +47,7 @@ export default function ProgressRow({
   item,
   opts,
   today,
+  draggable = false,
   onToggle,
   onOpen,
   onPatch,
@@ -51,6 +55,8 @@ export default function ProgressRow({
   item: ProgressItem;
   opts: ProgressOptions;
   today: string;
+  /** 可以拖曳調整順序（只有進行中的清單） */
+  draggable?: boolean;
   onToggle: (item: ProgressItem) => void;
   onOpen: (item: ProgressItem) => void;
   onPatch: (item: ProgressItem, patch: ProgressPatch) => void;
@@ -65,9 +71,42 @@ export default function ProgressRow({
   const statusColor = colorOf(opts.statuses, item.status);
   const hasNote = Boolean(item.opsNote || item.techNote);
   const nameOf = (list: ProgressOption[], id: string | undefined) => optionById(list, id)?.name;
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
+    id: item.id,
+    disabled: !draggable,
+  });
 
   return (
-    <li className={`${PROGRESS_GRID} border-t-[0.5px] border-hairline py-2 first:border-t-0`}>
+    <li
+      ref={setNodeRef}
+      style={{ transform: CSS.Translate.toString(transform), transition }}
+      className={`${PROGRESS_GRID} border-t-[0.5px] border-hairline py-2 first:border-t-0 ${
+        isDragging ? 'relative z-10 bg-white shadow-[0_6px_20px_rgba(0,0,0,0.18)]' : ''
+      }`}
+    >
+      {draggable ? (
+        <button
+          type="button"
+          ref={setActivatorNodeRef}
+          aria-label={T.dragLabel(item.name)}
+          {...attributes}
+          {...listeners}
+          // touch-action: none 才不會在手指拖動把手時變成捲動頁面
+          style={{ touchAction: 'none' }}
+          className="flex h-8 w-4 cursor-grab items-center justify-center text-ink-2/60 active:cursor-grabbing focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink"
+        >
+          <svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor" aria-hidden="true">
+            <circle cx="2.5" cy="3" r="1.3" />
+            <circle cx="7.5" cy="3" r="1.3" />
+            <circle cx="2.5" cy="8" r="1.3" />
+            <circle cx="7.5" cy="8" r="1.3" />
+            <circle cx="2.5" cy="13" r="1.3" />
+            <circle cx="7.5" cy="13" r="1.3" />
+          </svg>
+        </button>
+      ) : (
+        <span />
+      )}
       <button
         type="button"
         role="checkbox"

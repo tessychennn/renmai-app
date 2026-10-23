@@ -65,7 +65,7 @@ export function reopenStatusId(opts: ProgressOptions): string | undefined {
 
 // ── 排序、篩選、分組 ──
 
-export type ProgressSort = 'ops' | 'tech' | 'due';
+export type ProgressSort = 'ops' | 'tech' | 'due' | 'manual';
 
 const NO_DATE = '9999-99-99';
 const UNSET = 99;
@@ -80,13 +80,16 @@ const rankIn = (list: ProgressOption[], id: string | undefined) => {
  * - ops：營運優先級（第一個在前），同級再看技術等級（排前面的先），再看目標日期
  * - tech：技術等級（排前面的先），同級再看營運優先級
  * - due：目標日期近的在前（沒有的最後），同日再看營運優先級
+ * - manual：手動拖曳排的順序（sortOrder 小的在上面）；還沒排過的排最後，依建立時間
  * 最後都用建立時間定順序，讓結果穩定。沒填的排最後。
  */
 export function sortItems(items: ProgressItem[], sort: ProgressSort, opts: ProgressOptions): ProgressItem[] {
   const ops = (i: ProgressItem) => rankIn(opts.priorities, i.opsPriority);
   const tech = (i: ProgressItem) => rankIn(opts.techLevels, i.techLevel);
   const due = (i: ProgressItem) => i.dueDate ?? NO_DATE;
+  const manual = (i: ProgressItem) => i.sortOrder ?? 1e15;
   const compare = {
+    manual: (a: ProgressItem, b: ProgressItem) => manual(a) - manual(b),
     ops: (a: ProgressItem, b: ProgressItem) => ops(a) - ops(b) || tech(a) - tech(b) || due(a).localeCompare(due(b)),
     tech: (a: ProgressItem, b: ProgressItem) => tech(a) - tech(b) || ops(a) - ops(b) || due(a).localeCompare(due(b)),
     due: (a: ProgressItem, b: ProgressItem) => due(a).localeCompare(due(b)) || ops(a) - ops(b) || tech(a) - tech(b),
@@ -263,4 +266,52 @@ export function completeItem(item: ProgressItem, opts: ProgressOptions, now = ne
 export function reopenItem(item: ProgressItem, opts: ProgressOptions, now = new Date()): ProgressItem | null {
   const status = reopenStatusId(opts);
   return status ? patchItem(item, { status }, opts, now) : null;
+}
+
+// ── 手動拖曳排序 ──
+
+/** 新增項目時放在同一個大項目的最後面 */
+export function nextSortOrder(items: ProgressItem[], projectId: string): number {
+  const orders = items.filter((i) => i.projectId === projectId && i.sortOrder !== undefined).map((i) => i.sortOrder!);
+  return orders.length > 0 ? Math.max(...orders) + 1 : 1;
+}
+
+/**
+ * 把一個項目拖到另一個項目的位置（同一個大項目、目前畫面上顯示的順序）。回傳需要儲存的項目（已改好位置與更新時間）。
+ * - 目前的順序已經是手動排好的（每一個都有位置、而且由小到大）：只改被拖動的那一筆，
+ *   位置放在前後兩個鄰居的中間（小數），其他項目完全不動，同步時也只傳一筆。
+ * - 否則（第一次拖、或是從別的排序方式切過來）：依「目前畫面上的順序」重新編號，之後就是手動排序。
+ */
+export function moveItem(
+  displayed: ProgressItem[],
+  activeId: string,
+  overId: string,
+  now = new Date()
+): ProgressItem[] {
+  const from = displayed.findIndex((i) => i.id === activeId);
+  const to = displayed.findIndex((i) => i.id === overId);
+  if (from < 0 || to < 0 || from === to) return [];
+
+  const moved = [...displayed];
+  const [item] = moved.splice(from, 1);
+  moved.splice(to, 0, item);
+  const iso = now.toISOString();
+
+  const orders = displayed.map((i) => i.sortOrder);
+  const consistent = orders.every((o, k) => o !== undefined && (k === 0 || o > orders[k - 1]!));
+  if (consistent) {
+    const prev = moved[to - 1]?.sortOrder;
+    const next = moved[to + 1]?.sortOrder;
+    // 兩個鄰居之間的空隙太小（拖了很多次）就改成重新編號，避免小數精度用完
+    if (prev === undefined || next === undefined || next - prev > 1e-9) {
+      const value =
+        prev !== undefined && next !== undefined ? (prev + next) / 2 : prev !== undefined ? prev + 1 : next !== undefined ? next - 1 : 1;
+      return [{ ...item, sortOrder: value, updatedAt: iso }];
+    }
+  }
+
+  return moved
+    .map((it, k) => ({ it, position: k + 1 }))
+    .filter(({ it, position }) => it.id === activeId || it.sortOrder !== position)
+    .map(({ it, position }) => ({ ...it, sortOrder: position, updatedAt: iso }));
 }

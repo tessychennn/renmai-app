@@ -5,6 +5,7 @@ const SORT_LABEL: Record<ProgressSort, string> = {
   ops: T.sortOps,
   tech: T.sortTech,
   due: T.sortDue,
+  manual: T.sortManual,
 };
 
 const chip =

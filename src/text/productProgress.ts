@@ -80,6 +80,7 @@ export const PROGRESS_TEXT = {
   sortOps: '營運優先',
   sortTech: '技術等級',
   sortDue: '目標日期',
+  sortManual: '手動排序',
 
   /** 每個區塊的欄位標題（手機上空間小，請盡量短） */
   colName: '項目',
@@ -136,6 +137,7 @@ export const PROGRESS_TEXT = {
   confirmDeleteMessage: '刪除後無法復原。',
 
   /** 給螢幕閱讀器與按鈕提示用的文字 */
+  dragLabel: (name: string) => `拖曳「${name}」調整順序`,
   addButtonLabel: '新增項目',
   markDoneLabel: (name: string) => `完成「${name}」`,
   reopenLabel: (name: string) => `還原「${name}」到進行中`,

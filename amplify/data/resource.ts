@@ -89,6 +89,8 @@ const schema = a.schema({
       dueDate: a.string(),
       opsNote: a.string(),
       techNote: a.string(),
+      // 手動排序用的位置（小的在上面）。用小數，拖曳只需要改被拖動的那一筆。
+      sortOrder: a.float(),
       doneAt: a.string(),
       createdBy: a.string(),
       clientCreatedAt: a.string().required(),

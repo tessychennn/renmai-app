@@ -14,7 +14,9 @@ import {
   editItem,
   filterItems,
   groupByProject,
+  moveItem,
   newItem,
+  nextSortOrder,
   patchItem,
   reopenItem,
   reopenStatusId,
@@ -286,5 +288,77 @@ describe('本機資料庫', () => {
     expect(await ensureDefaultProgressOptions()).toBe(0);
     const names = (await progressOptionRepo.list('priority')).map((p) => p.name);
     expect(names).toEqual(['最急', 'P1', 'P2']);
+  });
+});
+
+describe('手動拖曳排序', () => {
+  const m = (id: string, sortOrder?: number, projectId = 'p1') => item(id, { sortOrder, projectId });
+  const orderOf = (list: ProgressItem[], changed: ProgressItem[]) => {
+    const map = new Map(list.map((i) => [i.id, i]));
+    for (const c of changed) map.set(c.id, c);
+    return sortItems([...map.values()], 'manual', OPTS).map((i) => `${i.id}`);
+  };
+
+  it('手動排序：位置小的在上面，還沒排過的排最後（依建立時間）', () => {
+    const list = [m('ccc', 3), m('a'), m('bb', 1), m('dddd', 2)];
+    expect(ids(sortItems(list, 'manual', OPTS))).toEqual(['bb', 'dddd', 'ccc', 'a']);
+  });
+
+  it('已經是手動排好的：只改被拖動的那一筆，位置放在前後鄰居中間，其他不動', () => {
+    const list = [m('a', 1), m('bb', 2), m('ccc', 3), m('dddd', 4)];
+    const changed = moveItem(list, 'dddd', 'bb', new Date('2026-10-20T00:00:00Z')); // 拖到第二個的位置
+    expect(changed.map((c) => c.id)).toEqual(['dddd']);
+    expect(changed[0].sortOrder).toBe(1.5);
+    expect(changed[0].updatedAt).toBe('2026-10-20T00:00:00.000Z');
+    expect(orderOf(list, changed)).toEqual(['a', 'dddd', 'bb', 'ccc']);
+  });
+
+  it('拖到最上面與最下面', () => {
+    const list = [m('a', 1), m('bb', 2), m('ccc', 3)];
+    const top = moveItem(list, 'ccc', 'a');
+    expect(top[0].sortOrder).toBe(0); // 比第一個小
+    expect(orderOf(list, top)).toEqual(['ccc', 'a', 'bb']);
+    const bottom = moveItem(list, 'a', 'ccc');
+    expect(bottom[0].sortOrder).toBe(4); // 比最後一個大
+    expect(orderOf(list, bottom)).toEqual(['bb', 'ccc', 'a']);
+  });
+
+  it('連續拖很多次：位置一直取中間，順序始終正確', () => {
+    let list = [m('a', 1), m('bb', 2), m('ccc', 3)];
+    for (let k = 0; k < 20; k++) {
+      // 每次把最後一個拖到第二個位置（兩個鄰居之間的空隙越來越小）
+      const sorted = sortItems(list, 'manual', OPTS);
+      const changed = moveItem(sorted, sorted[2].id, sorted[1].id);
+      const map = new Map(list.map((i) => [i.id, i]));
+      for (const c of changed) map.set(c.id, c);
+      list = [...map.values()];
+    }
+    expect(new Set(list.map((i) => i.sortOrder)).size).toBe(3); // 位置沒有重複
+  });
+
+  it('第一次拖、或是從別的排序切過來（位置還沒排過）：依目前畫面的順序重新編號', () => {
+    const shown = [m('a'), m('bb'), m('ccc')]; // 畫面上是依營運優先之類的順序，還沒有手動位置
+    const changed = moveItem(shown, 'ccc', 'a');
+    expect(changed.map((c) => [c.id, c.sortOrder])).toEqual([
+      ['ccc', 1],
+      ['a', 2],
+      ['bb', 3],
+    ]);
+    // 畫面順序與手動位置不一致（切過來之前排過）也重新編號
+    const mixed = [m('a', 5), m('bb', 2), m('ccc', 9)];
+    const changed2 = moveItem(mixed, 'bb', 'ccc');
+    expect(orderOf(mixed, changed2)).toEqual(['a', 'ccc', 'bb']);
+  });
+
+  it('拖到原地或找不到項目：什麼都不改', () => {
+    const list = [m('a', 1), m('bb', 2)];
+    expect(moveItem(list, 'a', 'a')).toEqual([]);
+    expect(moveItem(list, 'nope', 'a')).toEqual([]);
+  });
+
+  it('新增的項目排在同一個大項目的最後面，不受其他大項目影響', () => {
+    const list = [m('a', 1), m('bb', 7), m('x', 100, 'p2')];
+    expect(nextSortOrder(list, 'p1')).toBe(8);
+    expect(nextSortOrder(list, 'p3')).toBe(1);
   });
 });
