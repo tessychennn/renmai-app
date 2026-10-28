@@ -20,6 +20,7 @@ import {
   moveItem,
   newTask,
   nextTaskOrder,
+  orderByDue,
   patchTask,
   restoreTask,
   sortBoardStable,
@@ -76,6 +77,7 @@ export default function TasksPage() {
   const [filter, setFilter] = useState<TaskFilter>({});
   const [sheet, setSheet] = useState<{ task?: Task } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Task | null>(null);
+  const [confirmReset, setConfirmReset] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
@@ -159,6 +161,19 @@ export default function TasksPage() {
     reload();
   };
 
+  /** 把手動排的順序重排成 Deadline 順序 */
+  const resetOrderByDue = async () => {
+    setConfirmReset(false);
+    const changed = orderByDue(
+      tasks.filter((t) => !t.done),
+      options.priorities
+    );
+    if (changed.length > 0) await taskRepo.saveMany(changed);
+    setFrozen(new Map());
+    setToast('已依 Deadline 重新排列');
+    reload();
+  };
+
   const save = async (input: TaskInput, keepAdding: boolean) => {
     if (sheet?.task) {
       await taskRepo.save(editTask(sheet.task, input));
@@ -203,15 +218,19 @@ export default function TasksPage() {
         style={{ paddingTop: 'env(safe-area-inset-top)' }}
       >
         <div className="mx-auto max-w-6xl px-5">
-          <div className="flex items-center justify-between pt-3 pb-2">
-            <h1 className="flex items-center gap-2 text-2xl font-semibold">
+          {/* 電腦版（寬的畫面）：第一列是標題、檢視切換、操作鈕；第二列是篩選與排序，上方佔的高度少一點 */}
+          <div className="md:grid md:grid-cols-[auto_1fr_auto] md:items-center md:gap-x-4 md:pt-1">
+          <div className="flex items-center justify-between pt-3 pb-2 md:contents">
+            <h1 className="flex items-center gap-2 text-2xl font-semibold md:col-start-1 md:row-start-1">
               待辦
               <SyncDot />
             </h1>
-            <HeaderActions taskSettings />
+            <div className="md:col-start-3 md:row-start-1">
+              <HeaderActions taskSettings />
+            </div>
           </div>
 
-          <div role="tablist" aria-label="待辦檢視" className="mb-3 flex w-full rounded-full bg-ground p-1 md:w-fit">
+          <div role="tablist" aria-label="待辦檢視" className="mb-3 flex w-full rounded-full bg-ground p-1 md:col-start-2 md:row-start-1 md:mb-0 md:w-fit md:justify-self-start">
             {tabs.map((t) => (
               <button
                 key={t.value}
@@ -229,13 +248,17 @@ export default function TasksPage() {
             ))}
           </div>
 
+          <div className="md:col-span-3 md:pb-2 md:pt-2">
           <TaskFilters
             options={options}
             filter={filter}
             onChange={changeFilter}
             sort={view === 'board' ? sort : undefined}
             onSort={view === 'board' ? changeSort : undefined}
+            onResetOrder={() => setConfirmReset(true)}
           />
+          </div>
+          </div>
         </div>
       </header>
 
@@ -328,6 +351,14 @@ export default function TasksPage() {
           onClose={() => setSheet(null)}
         />
       )}
+
+      <ConfirmSheet
+        open={confirmReset}
+        title="依 Deadline 重新排列？"
+        message="你手動排的順序會被取代，之後依 Deadline 由近到遠排好，還是可以再拖曳調整。"
+        actions={[{ label: '重新排列', onClick: () => void resetOrderByDue() }]}
+        onClose={() => setConfirmReset(false)}
+      />
 
       <ConfirmSheet
         open={confirmDelete !== null}

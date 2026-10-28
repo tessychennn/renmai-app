@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import ClientSheet, { type SheetResult } from '../components/clients/ClientSheet';
 import ConfirmSheet from '../components/ConfirmSheet';
 import HeaderActions from '../components/HeaderActions';
+import SortControl from '../components/SortControl';
 import SyncDot from '../components/SyncDot';
 import TabBar from '../components/TabBar';
 import { InlineDate, InlineSelect } from '../components/tasks/InlineFields';
@@ -50,7 +51,7 @@ function loadSort(): ClientSort {
 }
 
 const chip =
-  'shrink-0 whitespace-nowrap rounded-full border-[0.5px] px-3 py-1.5 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink';
+  'shrink-0 whitespace-nowrap rounded-full border-[0.5px] px-3 py-1.5 text-sm md:px-2.5 md:py-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink';
 
 function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
@@ -180,15 +181,19 @@ export default function ClientsPage() {
         style={{ paddingTop: 'env(safe-area-inset-top)' }}
       >
         <div className="mx-auto max-w-4xl px-5">
-          <div className="flex items-center justify-between pt-3 pb-2">
-            <h1 className="flex items-center gap-2 text-2xl font-semibold">
+          {/* 電腦版（寬的畫面）：第一列是標題、檢視切換、操作鈕；第二列是篩選與排序，上方佔的高度少一點 */}
+          <div className="md:grid md:grid-cols-[auto_1fr_auto] md:items-center md:gap-x-4 md:pt-1">
+          <div className="flex items-center justify-between pt-3 pb-2 md:contents">
+            <h1 className="flex items-center gap-2 text-2xl font-semibold md:col-start-1 md:row-start-1">
               客戶
               <SyncDot />
             </h1>
-            <HeaderActions />
+            <div className="md:col-start-3 md:row-start-1">
+              <HeaderActions />
+            </div>
           </div>
 
-          <div role="tablist" aria-label="客戶" className="mb-3 flex w-full rounded-full bg-ground p-1 md:w-fit">
+          <div role="tablist" aria-label="客戶" className="mb-3 flex w-full rounded-full bg-ground p-1 md:col-start-2 md:row-start-1 md:mb-0 md:w-fit md:justify-self-start">
             {tabs.map((t) => (
               <button
                 key={t.value}
@@ -209,7 +214,7 @@ export default function ClientsPage() {
             ))}
           </div>
 
-          <div className="flex flex-col gap-2 pb-3">
+          <div className="flex flex-col gap-2 pb-3 md:col-span-3 md:flex-row md:flex-wrap md:items-center md:gap-x-4 md:gap-y-2 md:pb-2 md:pt-2">
             <div role="group" aria-label="依負責人篩選" className="flex gap-2 overflow-x-auto [scrollbar-width:none]">
               <Chip active={!filter.ownerId} onClick={() => changeFilter({ ownerId: undefined })}>
                 所有負責人
@@ -244,26 +249,8 @@ export default function ClientsPage() {
                 </Chip>
               ))}
             </div>
-            {view === 'open' && (
-              <div role="group" aria-label="排序" className="flex items-center gap-2 text-sm text-ink-2">
-                <span className="shrink-0">排序</span>
-                <div className="flex rounded-full bg-ground p-0.5">
-                  {(Object.keys(CLIENT_SORT_LABEL) as ClientSort[]).map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      aria-pressed={sort === s}
-                      onClick={() => changeSort(s)}
-                      className={`rounded-full px-3 py-1 whitespace-nowrap focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink ${
-                        sort === s ? 'bg-white font-medium text-ink shadow-[0_1px_3px_rgba(0,0,0,0.12)]' : ''
-                      }`}
-                    >
-                      {CLIENT_SORT_LABEL[s]}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+            {view === 'open' && <SortControl value={sort} options={CLIENT_SORT_LABEL} onChange={changeSort} />}
+          </div>
           </div>
         </div>
       </header>

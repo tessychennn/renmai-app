@@ -1,5 +1,5 @@
 import type { Task, TaskOption } from '../data/types';
-import { nextOrder } from './reorder';
+import { nextOrderIfManual } from './reorder';
 
 // ── 日期（一律用 YYYY-MM-DD 字串，不受時區影響） ──
 
@@ -107,7 +107,7 @@ export const TASK_SORT_LABEL: Record<TaskSort, string> = {
  * - priority：優先級（清單第一個最高；沒填的最後），再依 Deadline
  * - status：狀態清單的順序（沒填的最後），再依 Deadline
  * - created：最新建立的在前
- * - manual：手動拖曳排的順序（sortOrder 小的在上面）；還沒排過的排最後，依建立時間
+ * - manual：手動拖曳排的順序（sortOrder 小的在上面）；還沒排過的排在後面，先照 Deadline 排
  */
 export function sortBoard(
   tasks: Task[],
@@ -128,7 +128,9 @@ export function sortBoard(
     priority: (a: Task, b: Task) => pri(a) - pri(b) || due(a).localeCompare(due(b)) || byCreated(a, b),
     status: (a: Task, b: Task) => status(a) - status(b) || due(a).localeCompare(due(b)) || byCreated(a, b),
     created: (a: Task, b: Task) => byCreated(b, a),
-    manual: (a: Task, b: Task) => (a.sortOrder ?? 1e15) - (b.sortOrder ?? 1e15) || byCreated(a, b),
+    // 排過的在前（位置小的在上面）；還沒排過的先照 Deadline、優先級、建立時間排
+    manual: (a: Task, b: Task) =>
+      (a.sortOrder ?? 1e15) - (b.sortOrder ?? 1e15) || due(a).localeCompare(due(b)) || pri(a) - pri(b) || byCreated(a, b),
   }[sort];
   return [...tasks].sort(compare);
 }
@@ -154,11 +156,28 @@ export function sortBoardStable(
   ).map((t) => current.get(t.id)!);
 }
 
-/** 新增待辦時放在同一個分類的最後面 */
 export { moveItem } from './reorder';
 
-export function nextTaskOrder(tasks: Task[], categoryId: string): number {
-  return nextOrder(tasks.filter((t) => t.categoryId === categoryId));
+/** 新增待辦的位置：同一個分類已經手動排過才放在最後面，還沒排過就不給位置（依 Deadline） */
+export function nextTaskOrder(tasks: Task[], categoryId: string): number | undefined {
+  return nextOrderIfManual(tasks.filter((t) => t.categoryId === categoryId));
+}
+
+/**
+ * 把手動排序重排成 Deadline 順序（每個分類各自排，近的在前、沒有的最後，同天看優先級）。
+ * 回傳位置有變動的待辦（已改好位置與更新時間）。
+ */
+export function orderByDue(tasks: Task[], priorities: TaskOption[], now = new Date()): Task[] {
+  const iso = now.toISOString();
+  const byCategory = new Map<string, Task[]>();
+  for (const t of tasks) byCategory.set(t.categoryId, [...(byCategory.get(t.categoryId) ?? []), t]);
+  const changed: Task[] = [];
+  for (const group of byCategory.values()) {
+    sortBoard(group, priorities, 'due').forEach((t, k) => {
+      if (t.sortOrder !== k + 1) changed.push({ ...t, sortOrder: k + 1, updatedAt: iso });
+    });
+  }
+  return changed;
 }
 
 /** 完成區排序：最近完成的在前 */

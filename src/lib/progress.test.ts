@@ -299,9 +299,27 @@ describe('手動拖曳排序', () => {
     return sortItems([...map.values()], 'manual', OPTS).map((i) => `${i.id}`);
   };
 
-  it('手動排序：位置小的在上面，還沒排過的排最後（依建立時間）', () => {
+  it('手動排序：位置小的在上面，還沒排過的排最後（先照目標日期排）', () => {
     const list = [m('ccc', 3), m('a'), m('bb', 1), m('dddd', 2)];
     expect(ids(sortItems(list, 'manual', OPTS))).toEqual(['bb', 'dddd', 'ccc', 'a']);
+  });
+
+  it('手動排序：都還沒排過時，順序就是目標日期的順序（近的在前、沒有的最後）', () => {
+    const list = [
+      item('late', { dueDate: '2026-12-01' }),
+      item('nodate'),
+      item('soon', { dueDate: '2026-10-08' }),
+      item('mid', { dueDate: '2026-11-01' }),
+    ];
+    expect(ids(sortItems(list, 'manual', OPTS))).toEqual(['soon', 'mid', 'late', 'nodate']);
+    // 第一次拖曳以這個順序為起點重新編號
+    const changed = moveItem(sortItems(list, 'manual', OPTS), 'nodate', 'soon');
+    expect(changed.map((c) => [c.id, c.sortOrder])).toEqual([
+      ['nodate', 1],
+      ['soon', 2],
+      ['mid', 3],
+      ['late', 4],
+    ]);
   });
 
   it('已經是手動排好的：只改被拖動的那一筆，位置放在前後鄰居中間，其他不動', () => {
@@ -359,6 +377,6 @@ describe('手動拖曳排序', () => {
   it('新增的項目排在同一個大項目的最後面，不受其他大項目影響', () => {
     const list = [m('a', 1), m('bb', 7), m('x', 100, 'p2')];
     expect(nextSortOrder(list, 'p1')).toBe(8);
-    expect(nextSortOrder(list, 'p3')).toBe(1);
+    expect(nextSortOrder(list, 'p3')).toBeUndefined(); // 這個大項目還沒有人手動排過：不給位置，維持依目標日期
   });
 });

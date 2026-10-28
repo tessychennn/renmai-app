@@ -14,6 +14,14 @@ export function nextOrder(items: readonly Orderable[]): number {
 }
 
 /**
+ * 新增項目時用的位置：同一組已經有人手動排過順序才放在最後面；
+ * 還沒有人排過（大家都沒有位置）就不給位置，維持原本的排序（手動排序時依 Deadline）。
+ */
+export function nextOrderIfManual(items: readonly Orderable[]): number | undefined {
+  return items.some((i) => i.sortOrder !== undefined) ? nextOrder(items) : undefined;
+}
+
+/**
  * 把一個項目拖到另一個項目的位置（同一組、目前畫面上顯示的順序）。回傳需要儲存的項目（已改好位置與更新時間）。
  * - 目前的順序已經是手動排好的（每一個都有位置、而且由小到大）：只改被拖動的那一筆，
  *   位置放在前後兩個鄰居的中間（小數）。

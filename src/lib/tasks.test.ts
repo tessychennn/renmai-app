@@ -17,6 +17,7 @@ import {
   shiftMonth,
   moveItem,
   nextTaskOrder,
+  orderByDue,
   sortBoard,
   sortBoardStable,
   sortDone,
@@ -171,7 +172,33 @@ describe('排序', () => {
     ]);
 
     expect(nextTaskOrder([t('a', 4), t('b', 9, 'c2')], 'c1')).toBe(5);
-    expect(nextTaskOrder([t('b', 9, 'c2')], 'c1')).toBe(1);
+    expect(nextTaskOrder([t('b', 9, 'c2')], 'c1')).toBeUndefined(); // 這個分類還沒有人手動排過：不給位置，維持依 Deadline
+  });
+
+  it('手動排序：還沒排過的，順序就是 Deadline 的順序；已經排過的在前面', () => {
+    const t = (id: string, o: Partial<Task> = {}) => task({ id, ...o });
+    const none = [t('late', { dueDate: '2026-12-01' }), t('nodate'), t('soon', { dueDate: '2026-10-08' })];
+    expect(sortBoard(none, priorities, 'manual').map((x) => x.id)).toEqual(['soon', 'late', 'nodate']);
+    expect(sortBoard(none, priorities, 'manual').map((x) => x.id)).toEqual(sortBoard(none, priorities, 'due').map((x) => x.id));
+    const some = [t('late', { dueDate: '2026-12-01', sortOrder: 1 }), t('soon', { dueDate: '2026-10-08' })];
+    expect(sortBoard(some, priorities, 'manual').map((x) => x.id)).toEqual(['late', 'soon']);
+  });
+
+  it('依 Deadline 重排：每個分類各自重新編號（近的在前），只回傳有變動的；完成的不在範圍內由呼叫端決定', () => {
+    const t = (id: string, categoryId: string, o: Partial<Task> = {}) => task({ id, categoryId, ...o });
+    const tasks = [
+      t('a-late', 'c1', { dueDate: '2026-12-01', sortOrder: 1 }),
+      t('a-soon', 'c1', { dueDate: '2026-10-08', sortOrder: 2 }),
+      t('b-1', 'c2', { dueDate: '2026-10-01', sortOrder: 1 }), // 已經是對的
+      t('b-2', 'c2', { dueDate: '2026-10-09', sortOrder: 2 }),
+    ];
+    const changed = orderByDue(tasks, priorities, new Date('2026-10-20T00:00:00Z'));
+    expect(changed.map((x) => [x.id, x.sortOrder])).toEqual([
+      ['a-soon', 1],
+      ['a-late', 2],
+    ]);
+    expect(changed[0].updatedAt).toBe('2026-10-20T00:00:00.000Z');
+    expect(orderByDue(tasks.map((x) => changed.find((c) => c.id === x.id) ?? x), priorities)).toEqual([]); // 再重排一次不會再有變動
   });
 
   it('完成區：最近完成的在前', () => {

@@ -1,6 +1,6 @@
 import type { ProgressItem, ProgressOption } from '../data/types';
 import type { StatusColor } from './statusTone';
-import { nextOrder } from './reorder';
+import { nextOrderIfManual } from './reorder';
 import { todayStr } from './tasks';
 
 // 產品進度：營運端排「優先級」，技術端排「技術等級」，兩個欄位分開、由不同的人填。
@@ -81,7 +81,7 @@ const rankIn = (list: ProgressOption[], id: string | undefined) => {
  * - ops：營運優先級（第一個在前），同級再看技術等級（排前面的先），再看目標日期
  * - tech：技術等級（排前面的先），同級再看營運優先級
  * - due：目標日期近的在前（沒有的最後），同日再看營運優先級
- * - manual：手動拖曳排的順序（sortOrder 小的在上面）；還沒排過的排最後，依建立時間
+ * - manual：手動拖曳排的順序（sortOrder 小的在上面）；還沒排過的排在後面，先照目標日期排
  * 最後都用建立時間定順序，讓結果穩定。沒填的排最後。
  */
 export function sortItems(items: ProgressItem[], sort: ProgressSort, opts: ProgressOptions): ProgressItem[] {
@@ -90,7 +90,9 @@ export function sortItems(items: ProgressItem[], sort: ProgressSort, opts: Progr
   const due = (i: ProgressItem) => i.dueDate ?? NO_DATE;
   const manual = (i: ProgressItem) => i.sortOrder ?? 1e15;
   const compare = {
-    manual: (a: ProgressItem, b: ProgressItem) => manual(a) - manual(b),
+    // 排過的在前（位置小的在上面）；還沒排過的先照目標日期、營運優先級、技術等級排
+    manual: (a: ProgressItem, b: ProgressItem) =>
+      manual(a) - manual(b) || due(a).localeCompare(due(b)) || ops(a) - ops(b) || tech(a) - tech(b),
     ops: (a: ProgressItem, b: ProgressItem) => ops(a) - ops(b) || tech(a) - tech(b) || due(a).localeCompare(due(b)),
     tech: (a: ProgressItem, b: ProgressItem) => tech(a) - tech(b) || ops(a) - ops(b) || due(a).localeCompare(due(b)),
     due: (a: ProgressItem, b: ProgressItem) => due(a).localeCompare(due(b)) || ops(a) - ops(b) || tech(a) - tech(b),
@@ -273,7 +275,7 @@ export function reopenItem(item: ProgressItem, opts: ProgressOptions, now = new 
 
 export { moveItem } from './reorder';
 
-/** 新增項目時放在同一個大項目的最後面 */
-export function nextSortOrder(items: ProgressItem[], projectId: string): number {
-  return nextOrder(items.filter((i) => i.projectId === projectId));
+/** 新增項目的位置：同一個大項目已經手動排過才放在最後面，還沒排過就不給位置（依目標日期） */
+export function nextSortOrder(items: ProgressItem[], projectId: string): number | undefined {
+  return nextOrderIfManual(items.filter((i) => i.projectId === projectId));
 }
