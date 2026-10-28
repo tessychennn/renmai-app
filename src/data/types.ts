@@ -55,6 +55,8 @@ export interface Task {
   priorityId?: string;
   statusId?: string;
   note?: string;
+  /** 手動排序的位置（小的在上面，同一個分類內比較）。用小數，拖曳時只需要改被拖動的那一筆。 */
+  sortOrder?: number;
   createdBy?: string;
   createdAt: string;
   updatedAt: string;

@@ -180,7 +180,7 @@ export default function ProgressPage() {
         style={{ paddingTop: 'env(safe-area-inset-top)' }}
       >
         <div className="mx-auto max-w-6xl px-5">
-          <div className="flex items-center justify-between pt-3 pb-2">
+          <div className="flex items-center justify-between pt-3 pb-2 md:pt-2 md:pb-1.5">
             <h1 className="flex items-center gap-2 text-2xl font-semibold">
               {T.pageTitle}
               <SyncDot />
@@ -188,32 +188,35 @@ export default function ProgressPage() {
             <HeaderActions progressSettings />
           </div>
 
-          <div role="tablist" aria-label={T.pageTitle} className="mb-3 flex w-full rounded-full bg-ground p-1 md:w-fit">
-            {tabs.map((t) => (
-              <button
-                key={t.value}
-                type="button"
-                role="tab"
-                aria-selected={view === t.value}
-                onClick={() => changeView(t.value)}
-                className={`flex-1 rounded-full px-5 py-1.5 text-sm font-medium whitespace-nowrap focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink md:flex-none ${
-                  view === t.value ? 'bg-white shadow-[0_1px_3px_rgba(0,0,0,0.12)]' : 'text-ink-2'
-                }`}
-              >
-                {t.label}
-                <span className="ml-1 font-normal text-ink-2">{t.count}</span>
-              </button>
-            ))}
-          </div>
+          {/* 電腦版（寬的畫面）：進行中／完成、大項目篩選、排序放在同一列，上方佔的高度少一點 */}
+          <div className="md:flex md:items-center md:gap-4 md:pb-2">
+            <div role="tablist" aria-label={T.pageTitle} className="mb-3 flex w-full rounded-full bg-ground p-1 md:mb-0 md:w-fit md:shrink-0">
+              {tabs.map((t) => (
+                <button
+                  key={t.value}
+                  type="button"
+                  role="tab"
+                  aria-selected={view === t.value}
+                  onClick={() => changeView(t.value)}
+                  className={`flex-1 rounded-full px-5 py-1.5 text-sm font-medium whitespace-nowrap focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink md:flex-none ${
+                    view === t.value ? 'bg-white shadow-[0_1px_3px_rgba(0,0,0,0.12)]' : 'text-ink-2'
+                  }`}
+                >
+                  {t.label}
+                  <span className="ml-1 font-normal text-ink-2">{t.count}</span>
+                </button>
+              ))}
+            </div>
 
-          <ProgressFilters
-            opts={opts}
-            filter={filter}
-            sort={sort}
-            showSort={view === 'open'}
-            onChange={changeFilter}
-            onSort={changeSort}
-          />
+            <ProgressFilters
+              opts={opts}
+              filter={filter}
+              sort={sort}
+              showSort={view === 'open'}
+              onChange={changeFilter}
+              onSort={changeSort}
+            />
+          </div>
         </div>
       </header>
 

@@ -245,7 +245,7 @@ export default function PersonFormPage() {
       if (editing) {
         navigate(`/person/${person.id}`, { replace: true });
       } else {
-        navigate('/', { state: { toast: `已記下 ${person.displayName}` } });
+        navigate('/people', { state: { toast: `已記下 ${person.displayName}` } });
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : '儲存失敗，請再試一次。');

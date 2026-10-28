@@ -43,8 +43,12 @@ export default function ProgressFilters({
   const toggleProject = (id: string) => onChange({ projectId: filter.projectId === id ? undefined : id });
 
   return (
-    <div className="flex flex-col gap-2 pb-3">
-      <div role="group" aria-label={T.fieldProject} className="flex gap-2 overflow-x-auto [scrollbar-width:none]">
+    <div className="flex flex-col gap-2 pb-3 md:min-w-0 md:flex-1 md:flex-row md:items-center md:gap-4 md:pb-0">
+      <div
+        role="group"
+        aria-label={T.fieldProject}
+        className="flex gap-2 overflow-x-auto [scrollbar-width:none] md:min-w-0 md:flex-1"
+      >
         <Chip active={!filter.projectId} onClick={() => onChange({ projectId: undefined })}>
           {T.allProjects}
         </Chip>
@@ -55,7 +59,7 @@ export default function ProgressFilters({
         ))}
       </div>
       {showSort && (
-        <div role="group" aria-label={T.sortLabel} className="flex items-center gap-2 text-sm text-ink-2">
+        <div role="group" aria-label={T.sortLabel} className="flex items-center gap-2 text-sm text-ink-2 md:shrink-0">
           <span className="shrink-0">{T.sortLabel}</span>
           <div className="flex rounded-full bg-ground p-0.5">
             {(Object.keys(SORT_LABEL) as ProgressSort[]).map((s) => (

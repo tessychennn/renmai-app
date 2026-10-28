@@ -452,7 +452,13 @@ export function createRemoteStore(): RemoteStore {
 
     async putTask(t) {
       if (!backendSupportsTasks()) throw new Error(TASKS_NOT_DEPLOYED);
-      const fields = taskToFields(t);
+      let fields = taskToFields(t);
+      if (!introspectedModels()?.Task?.fields?.sortOrder) {
+        // 舊的連線設定不認得手動排序欄位：有排過順序的待辦先不上傳（標記留著，後端更新後自動補傳），其他照常上傳
+        if (t.sortOrder !== undefined) throw new Error(fieldsNotDeployed('待辦的手動排序'));
+        const { sortOrder: _sortOrder, ...rest } = fields;
+        fields = rest as typeof fields;
+      }
       try {
         const existing = await client.models.Task.get({ id: t.id });
         assertOk(existing.errors);

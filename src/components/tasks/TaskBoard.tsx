@@ -1,3 +1,14 @@
+import {
+  closestCenter,
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
+import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import type { Task } from '../../data/types';
 import { groupByCategory, type InlinePatch, type SplitOptions } from '../../lib/tasks';
 import TaskRow from './TaskRow';
@@ -28,19 +39,30 @@ export default function TaskBoard({
   today,
   emptyText,
   variant = 'list',
+  draggable = false,
   onToggle,
   onOpen,
   onPatch,
+  onReorder,
 }: {
   tasks: Task[];
   options: SplitOptions;
   today: string;
   emptyText: string;
   variant?: 'table' | 'list';
+  /** 可以拖曳調整順序（待辦看板才有） */
+  draggable?: boolean;
   onToggle: (task: Task) => void;
   onOpen: (task: Task) => void;
   onPatch?: (task: Task, patch: InlinePatch) => void;
+  /** 把 activeId 拖到 overId 的位置；tasks 是那個分類目前畫面上的順序 */
+  onReorder?: (tasks: Task[], activeId: string, overId: string) => void;
 }) {
+  // 拖曳把手在手機上用手指、電腦用滑鼠，也可以用鍵盤（把手上按空白鍵再用方向鍵）
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
   const groups = groupByCategory(tasks, options.categories);
   if (groups.length === 0) {
     return <p className="mt-24 text-center text-ink-2">{emptyText}</p>;
@@ -64,23 +86,35 @@ export default function TaskBoard({
             <span className="font-normal text-ink-2">{g.tasks.length}</span>
           </h2>
           {variant === 'table' && <TableHeader />}
-          <ul>
-            {g.tasks.map((t) =>
-              variant === 'table' && onPatch ? (
-                <TaskTableRow
-                  key={t.id}
-                  task={t}
-                  options={options}
-                  today={today}
-                  onToggle={onToggle}
-                  onOpen={onOpen}
-                  onPatch={onPatch}
-                />
-              ) : (
-                <TaskRow key={t.id} task={t} options={options} today={today} onToggle={onToggle} onOpen={onOpen} />
-              )
-            )}
-          </ul>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            modifiers={[restrictToVerticalAxis]}
+            onDragEnd={(e: DragEndEvent) => {
+              if (e.over && e.active.id !== e.over.id) onReorder?.(g.tasks, String(e.active.id), String(e.over.id));
+            }}
+          >
+            <SortableContext items={g.tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
+              <ul>
+                {g.tasks.map((t) =>
+                  variant === 'table' && onPatch ? (
+                    <TaskTableRow
+                      key={t.id}
+                      task={t}
+                      options={options}
+                      today={today}
+                      draggable={draggable && Boolean(onReorder)}
+                      onToggle={onToggle}
+                      onOpen={onOpen}
+                      onPatch={onPatch}
+                    />
+                  ) : (
+                    <TaskRow key={t.id} task={t} options={options} today={today} onToggle={onToggle} onOpen={onOpen} />
+                  )
+                )}
+              </ul>
+            </SortableContext>
+          </DndContext>
         </section>
       ))}
     </div>

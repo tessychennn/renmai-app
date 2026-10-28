@@ -64,8 +64,12 @@ describe('身分快取', () => {
 describe('同步範圍與首頁', () => {
   it('同步範圍就是有權限的資料；首頁導到第一個能進的頁面', () => {
     expect(syncScopeOf(accessOf(['tech']))).toEqual({ people: false, todo: true, progress: true });
-    expect(homeRoute(accessOf(['team']))).toBe('/');
-    expect(homeRoute(accessOf(['tech']))).toBe('/progress');
+    // 打開 App 的第一個頁面是待辦；沒有待辦權限的人依序是產品進度、人脈記錄
+    expect(homeRoute(accessOf(['team']))).toBe('/tasks');
+    expect(homeRoute(accessOf(['admin']))).toBe('/tasks');
+    expect(homeRoute(accessOf(['tech']))).toBe('/tasks');
     expect(homeRoute(accessOf(['todo']))).toBe('/tasks');
+    expect(homeRoute({ admin: false, people: false, todo: false, progress: true })).toBe('/progress');
+    expect(homeRoute({ admin: false, people: true, todo: false, progress: false })).toBe('/people');
   });
 });

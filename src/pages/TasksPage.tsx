@@ -17,7 +17,9 @@ import {
   dueState,
   editTask,
   filterTasks,
+  moveItem,
   newTask,
+  nextTaskOrder,
   patchTask,
   restoreTask,
   sortBoardStable,
@@ -39,7 +41,9 @@ const SORT_KEY = 'renmai.taskSort';
 function loadSort(): TaskSort {
   try {
     const saved = localStorage.getItem(SORT_KEY);
-    if (saved === 'due' || saved === 'priority' || saved === 'status' || saved === 'created') return saved;
+    if (saved === 'due' || saved === 'priority' || saved === 'status' || saved === 'created' || saved === 'manual') {
+      return saved;
+    }
   } catch {
     // 拿不到就用預設
   }
@@ -140,12 +144,28 @@ export default function TasksPage() {
     reload();
   };
 
+  /** 拖曳調整順序：之後自動切到「手動排序」，才看得到自己排的順序 */
+  const reorder = async (displayed: Task[], activeId: string, overId: string) => {
+    const changed = moveItem(displayed, activeId, overId);
+    if (changed.length === 0) return;
+    await taskRepo.saveMany(changed);
+    setFrozen(new Map());
+    setSort('manual');
+    try {
+      localStorage.setItem(SORT_KEY, 'manual');
+    } catch {
+      // 存不了只在這次生效
+    }
+    reload();
+  };
+
   const save = async (input: TaskInput, keepAdding: boolean) => {
     if (sheet?.task) {
       await taskRepo.save(editTask(sheet.task, input));
       setSheet(null);
     } else {
-      await taskRepo.save(newTask(input, memberName));
+      // 新增的放在同一個分類的最後面（手動排序時就在最下面）
+      await taskRepo.save({ ...newTask(input, memberName), sortOrder: nextTaskOrder(tasks, input.categoryId) });
       try {
         localStorage.setItem(LAST_CATEGORY_KEY, input.categoryId);
       } catch {
@@ -251,6 +271,8 @@ export default function TasksPage() {
               today={today}
               emptyText={emptyFor('目前沒有待辦事項。')}
               variant="table"
+              draggable
+              onReorder={(group, a, b) => void reorder(group, a, b)}
               onToggle={(t) => void toggle(t)}
               onOpen={(t) => setSheet({ task: t })}
               onPatch={(t, change) => void patch(t, change)}

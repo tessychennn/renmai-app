@@ -56,7 +56,7 @@ export default function PersonDetailPage() {
   const remove = async () => {
     if (!id) return;
     await deletePersonWithPhotos(id);
-    navigate('/', { state: { toast: '已刪除' } });
+    navigate('/people', { state: { toast: '已刪除' } });
   };
 
   if (person === undefined) return <div className="min-h-dvh" />;

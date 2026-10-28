@@ -22,7 +22,7 @@ function AppRoutes() {
     <Routes>
       {role.people && (
         <>
-          <Route path="/" element={<HomePage />} />
+          <Route path="/people" element={<HomePage />} />
           <Route path="/clients" element={<ClientsPage />} />
           <Route path="/new" element={<PersonFormPage />} />
           <Route path="/person/:id" element={<PersonDetailPage />} />
@@ -43,6 +43,8 @@ function AppRoutes() {
           <Route path="/progress/settings" element={<ProgressSettingsPage />} />
         </>
       )}
+      {/* 網址是 / （剛打開 App）時導到第一個頁面：待辦 */}
+      <Route path="/" element={<Navigate to={home} replace />} />
       {/* 舊的「合作機會」頁已經改成「客戶」；舊網址導到客戶 */}
       <Route path="/collab" element={<Navigate to={role.people ? '/clients' : home} replace />} />
       <Route path="*" element={<Navigate to={home} replace />} />

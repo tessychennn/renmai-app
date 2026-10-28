@@ -15,6 +15,8 @@ import {
   priorityTone,
   restoreTask,
   shiftMonth,
+  moveItem,
+  nextTaskOrder,
   sortBoard,
   sortBoardStable,
   sortDone,
@@ -151,6 +153,25 @@ describe('排序', () => {
     expect(ids('priority')).toEqual(['a', 'c', 'b']); // 高優先在前；同級看 Deadline
     expect(ids('status')).toEqual(['b', 'a', 'c']); // 未開始、進行中，沒填的最後
     expect(ids('created')).toEqual(['b', 'c', 'a']); // 最新建立的在前
+  });
+
+  it('手動排序：位置小的在上面，還沒排過的排最後；拖曳只改被拖動的那一筆；新增的放分類最後', () => {
+    const t = (id: string, sortOrder?: number, categoryId = 'c1') => task({ id, sortOrder, categoryId });
+    const list = [t('c', 3), t('a'), t('b', 1), t('d', 2)];
+    expect(sortBoard(list, priorities, 'manual').map((x) => x.id)).toEqual(['b', 'd', 'c', 'a']);
+
+    const sorted = [t('a', 1), t('b', 2), t('c', 3)];
+    const changed = moveItem(sorted, 'c', 'a');
+    expect(changed.map((x) => [x.id, x.sortOrder])).toEqual([['c', 0]]);
+    // 還沒排過的：依目前畫面順序重新編號
+    expect(moveItem([t('x'), t('y'), t('z')], 'z', 'x').map((x) => [x.id, x.sortOrder])).toEqual([
+      ['z', 1],
+      ['x', 2],
+      ['y', 3],
+    ]);
+
+    expect(nextTaskOrder([t('a', 4), t('b', 9, 'c2')], 'c1')).toBe(5);
+    expect(nextTaskOrder([t('b', 9, 'c2')], 'c1')).toBe(1);
   });
 
   it('完成區：最近完成的在前', () => {

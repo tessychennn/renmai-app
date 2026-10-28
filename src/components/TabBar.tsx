@@ -6,9 +6,24 @@ type Need = 'people' | 'todo' | 'progress';
 
 const TABS: { to: string; label: string; end: boolean; need: Need; icon: React.ReactNode }[] = [
   {
-    to: '/',
+    to: '/tasks',
+    label: '待辦',
+    end: false,
+    need: 'todo',
+    icon: (
+      <path
+        d="m4 7 1.5 1.5L8 6M4 13l1.5 1.5L8 12M11 7.5h9M11 13.5h9M4 19h16"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    ),
+  },
+  {
+    to: '/people',
     label: '人脈記錄',
-    end: true,
+    end: false,
     need: 'people',
     icon: (
       <path
@@ -28,21 +43,6 @@ const TABS: { to: string; label: string; end: boolean; need: Need; icon: React.R
     icon: (
       <path
         d="M16 20c0-2.2-1.8-4-4-4H7c-2.2 0-4 1.8-4 4M9.5 12.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM21 20c0-1.9-1.3-3.5-3-3.9M15.5 5.7a3.5 3.5 0 0 1 0 6.6"
-        stroke="currentColor"
-        strokeWidth="1.7"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    ),
-  },
-  {
-    to: '/tasks',
-    label: '待辦',
-    end: false,
-    need: 'todo',
-    icon: (
-      <path
-        d="m4 7 1.5 1.5L8 6M4 13l1.5 1.5L8 12M11 7.5h9M11 13.5h9M4 19h16"
         stroke="currentColor"
         strokeWidth="1.7"
         strokeLinecap="round"

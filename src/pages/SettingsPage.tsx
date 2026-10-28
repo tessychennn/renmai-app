@@ -66,7 +66,7 @@ export default function SettingsPage() {
     setMessage('');
     try {
       await importBackup(importFile, mode);
-      navigate('/', { state: { toast: '匯入完成' } });
+      navigate('/people', { state: { toast: '匯入完成' } });
     } catch (e) {
       setMessage(e instanceof Error ? e.message : '匯入失敗，檔案可能已損壞。');
       setBusy(false);
@@ -79,7 +79,7 @@ export default function SettingsPage() {
     setDeleteStep(0);
     setBusy(true);
     await clearAllData();
-    navigate('/', { state: { toast: cloudEnabled ? '已清除這支手機上的資料' : '已刪除所有資料' } });
+    navigate('/people', { state: { toast: cloudEnabled ? '已清除這支手機上的資料' : '已刪除所有資料' } });
   };
 
   return (

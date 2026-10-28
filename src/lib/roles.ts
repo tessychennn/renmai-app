@@ -82,10 +82,13 @@ export function syncScopeOf(access: Access): { people: boolean; todo: boolean; p
   return { people: access.people, todo: access.todo, progress: access.progress };
 }
 
-/** 這個身分第一個能進的頁面（首頁不能進時導到這裡） */
+/**
+ * 打開 App 時的第一個頁面（也是網址不存在或沒有權限時導回的頁面）：優先待辦，
+ * 沒有待辦權限的人依序是產品進度、人脈記錄。
+ */
 export function homeRoute(access: Access): string {
-  if (access.people) return '/';
-  if (access.progress) return '/progress';
   if (access.todo) return '/tasks';
-  return '/';
+  if (access.progress) return '/progress';
+  if (access.people) return '/people';
+  return '/tasks';
 }
