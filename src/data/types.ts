@@ -139,6 +139,8 @@ export interface Client {
   name?: string;
   /** 等級（重要／潛在）：src/text/clients.ts 裡的等級編號；沒設定就排在最後 */
   level?: string;
+  /** 手動排序的位置（小的在上面）。用小數，拖曳時只需要改被拖動的那一筆。 */
+  sortOrder?: number;
   /** 狀態：src/text/clients.ts 裡的狀態編號 */
   statusId?: string;
   /** 負責人：待辦選項裡 kind = 'member' 的那一種 */

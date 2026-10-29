@@ -1,5 +1,17 @@
+import {
+  closestCenter,
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
+import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useEffect, useMemo, useState } from 'react';
 import ClientSheet, { type SheetResult } from '../components/clients/ClientSheet';
+import SortableRow from '../components/clients/SortableRow';
 import ConfirmSheet from '../components/ConfirmSheet';
 import HeaderActions from '../components/HeaderActions';
 import SortControl from '../components/SortControl';
@@ -19,7 +31,9 @@ import {
   clientStatusOf,
   editClient,
   filterClients,
+  moveItem,
   newStandaloneClient,
+  nextClientOrder,
   patchClient,
   sortClients,
   toggleClientDone,
@@ -36,14 +50,14 @@ import { CLIENT_LEVELS, CLIENT_STATUSES } from '../text/clients';
 type View = 'open' | 'done';
 
 const GRID =
-  'grid grid-cols-[1.5rem_minmax(0,1fr)_2.9rem_3.6rem_4rem] items-center gap-x-1 px-2 text-sm md:grid-cols-[1.5rem_minmax(0,1fr)_4.5rem_6.5rem_6rem_6.5rem] md:gap-x-2 md:px-3 md:text-base';
+  'grid grid-cols-[1rem_1.5rem_minmax(0,1fr)_2.9rem_3.6rem_4rem] items-center gap-x-1 px-2 text-sm md:grid-cols-[1rem_1.5rem_minmax(0,1fr)_4.5rem_6.5rem_6rem_6.5rem] md:gap-x-2 md:px-3 md:text-base';
 
 const SORT_KEY = 'renmai.clientSort';
 
 function loadSort(): ClientSort {
   try {
     const saved = localStorage.getItem(SORT_KEY);
-    if (saved === 'level' || saved === 'due') return saved;
+    if (saved === 'level' || saved === 'due' || saved === 'manual') return saved;
   } catch {
     // 拿不到就用預設
   }
@@ -110,6 +124,28 @@ export default function ClientsPage() {
     setFrozen(new Map());
   };
 
+  // 拖曳把手在手機上用手指、電腦用滑鼠，也可以用鍵盤（把手上按空白鍵再用方向鍵）
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  /** 拖曳調整順序：之後自動切到「手動排序」，才看得到自己排的順序 */
+  const reorder = async (e: DragEndEvent) => {
+    if (!e.over || e.active.id === e.over.id) return;
+    const changed = moveItem(open, String(e.active.id), String(e.over.id));
+    if (changed.length === 0) return;
+    await clientRepo.saveMany(changed);
+    setFrozen(new Map());
+    setSort('manual');
+    try {
+      localStorage.setItem(SORT_KEY, 'manual');
+    } catch {
+      // 存不了只在這次生效
+    }
+    reload();
+  };
+
   const changeSort = (next: ClientSort) => {
     setFrozen(new Map());
     setSort(next);
@@ -138,11 +174,11 @@ export default function ClientsPage() {
     } else if (input.personId) {
       // 連結人脈記錄裡的人：編號由人物編號推出（移出過的會被新的取代）
       const existing = await clientRepo.get(clientIdOf(input.personId));
-      await clientRepo.save(
-        editClient(buildClient({ id: input.personId }, { statusId: input.statusId || undefined }, existing), input)
-      );
+      const linked = editClient(buildClient({ id: input.personId }, { statusId: input.statusId || undefined }, existing), input);
+      await clientRepo.save({ ...linked, sortOrder: nextClientOrder(clients) });
     } else {
-      await clientRepo.save(newStandaloneClient({ ...input, name: input.name ?? '' }));
+      // 新增的放在最後面（手動排序時就在最下面）
+      await clientRepo.save({ ...newStandaloneClient({ ...input, name: input.name ?? '' }), sortOrder: nextClientOrder(clients) });
       setToast(`已加入「${(input.name ?? '').trim()}」`);
     }
     setSheet(null);
@@ -262,12 +298,20 @@ export default function ClientsPage() {
           <section className="overflow-hidden rounded-2xl border-[0.5px] border-hairline bg-white shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
             <div aria-hidden="true" className={`${GRID} border-b-[0.5px] border-hairline py-1.5 text-xs text-ink-2`}>
               <span />
+              <span />
               <span>名稱</span>
               <span>等級</span>
               <span>負責人</span>
               <span>狀態</span>
               <span className="hidden text-center md:block">下次聯絡</span>
             </div>
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              modifiers={[restrictToVerticalAxis]}
+              onDragEnd={(e) => void reorder(e)}
+            >
+            <SortableContext items={list.map((c) => c.id)} strategy={verticalListSortingStrategy}>
             <ul>
               {list.map((c) => {
                 const status = clientStatusOf(c.statusId)?.name;
@@ -287,7 +331,13 @@ export default function ClientsPage() {
                     : CLIENT_STATUSES;
                 const due = c.dueDate ? dueLabel(c.dueDate, today) : undefined;
                 return (
-                  <li key={c.id} className={`${GRID} border-t-[0.5px] border-hairline py-2 first:border-t-0`}>
+                  <SortableRow
+                    key={c.id}
+                    id={c.id}
+                    draggable={view === 'open'}
+                    label={`拖曳「${name}」調整順序`}
+                    className={`${GRID} border-t-[0.5px] border-hairline py-2 first:border-t-0`}
+                  >
                     <button
                       type="button"
                       role="checkbox"
@@ -355,10 +405,12 @@ export default function ClientsPage() {
                         onChange={(dueDate) => void patch(c, { dueDate })}
                       />
                     </span>
-                  </li>
+                  </SortableRow>
                 );
               })}
             </ul>
+            </SortableContext>
+            </DndContext>
           </section>
         )}
       </main>

@@ -4,6 +4,7 @@ import { personIdOfTask } from '../data/prospectId';
 import type { Client, Person, TaskOption } from '../data/types';
 import { CLIENT_LEVELS, CLIENT_STATUSES, type ClientStatus } from '../text/clients';
 import type { StatusColor } from './statusTone';
+import { nextOrderIfManual } from './reorder';
 import { splitOptions } from './tasks';
 
 // 客戶：聯絡中的名單。可以從人脈記錄標記（編號由人物編號固定推出，兩支手機各自建立也是同一筆，
@@ -121,6 +122,13 @@ export function newStandaloneClient(input: NewClientInput, now = new Date()): Cl
   };
 }
 
+export { moveItem } from './reorder';
+
+/** 新增客戶的位置：已經手動排過才放在最後面，還沒排過就不給位置（依重要等級） */
+export function nextClientOrder(clients: Client[]): number | undefined {
+  return nextOrderIfManual(clients.filter((c) => !c.deletedAt));
+}
+
 export const UNASSIGNED = 'unassigned';
 
 export interface ClientFilter {
@@ -140,11 +148,12 @@ export function filterClients(clients: Client[], filter: ClientFilter): Client[]
 
 const NO_DATE = '9999-99-99';
 
-export type ClientSort = 'level' | 'due';
+export type ClientSort = 'level' | 'due' | 'manual';
 
 export const CLIENT_SORT_LABEL: Record<ClientSort, string> = {
   level: '重要等級',
   due: '下次聯絡',
+  manual: '手動排序',
 };
 
 /**
@@ -152,6 +161,7 @@ export const CLIENT_SORT_LABEL: Record<ClientSort, string> = {
  * - level（預設）：等級排前面的在上面（重要在潛在上面，沒設定的最後），同級再依下次聯絡（沒有日期的最後）、
  *   狀態清單的順序、建立時間
  * - due：下次聯絡近的在前（沒有日期的最後），同日再依等級、狀態、建立時間
+ * - manual：手動拖曳排的順序（sortOrder 小的在上面）；還沒排過的排在後面，先照重要等級排
  */
 export function sortClients(clients: Client[], sort: ClientSort = 'level'): Client[] {
   const levelRank = (c: Client) => {
@@ -163,12 +173,15 @@ export function sortClients(clients: Client[], sort: ClientSort = 'level'): Clie
     return i < 0 ? 99 : i;
   };
   const due = (c: Client) => c.dueDate ?? NO_DATE;
+  const byLevel = (a: Client, b: Client) =>
+    levelRank(a) - levelRank(b) || due(a).localeCompare(due(b)) || statusRank(a) - statusRank(b);
   const compare =
     sort === 'due'
       ? (a: Client, b: Client) =>
           due(a).localeCompare(due(b)) || levelRank(a) - levelRank(b) || statusRank(a) - statusRank(b)
-      : (a: Client, b: Client) =>
-          levelRank(a) - levelRank(b) || due(a).localeCompare(due(b)) || statusRank(a) - statusRank(b);
+      : sort === 'manual'
+        ? (a: Client, b: Client) => (a.sortOrder ?? 1e15) - (b.sortOrder ?? 1e15) || byLevel(a, b)
+        : byLevel;
   return [...clients].sort((a, b) => compare(a, b) || a.createdAt.localeCompare(b.createdAt));
 }
 

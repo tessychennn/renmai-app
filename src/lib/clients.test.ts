@@ -23,7 +23,9 @@ import {
   migrateCollabToClients,
   migrateProspectTasks,
   migrateToClients,
+  moveItem,
   newStandaloneClient,
+  nextClientOrder,
   patchClient,
   removeClient,
   setClient,
@@ -213,6 +215,25 @@ describe('客戶頁的篩選、排序與修改', () => {
     ];
     expect(sortClients(list).map((c) => c.personId)).toEqual(['dddd', 'ccc', 'bb', 'eeeee', 'a']);
     expect(sortClients(list, 'level')).toEqual(sortClients(list));
+  });
+
+  it('手動排序：位置小的在上面；還沒排過的排後面（先照重要等級）；都沒排過時就是重要等級的順序', () => {
+    const list = [
+      client('a', { level: 'potential' }),
+      client('bb', { level: 'important' }),
+      client('ccc'),
+    ];
+    expect(sortClients(list, 'manual').map((c) => c.personId)).toEqual(sortClients(list, 'level').map((c) => c.personId));
+    const ordered = [client('a', { sortOrder: 2 }), client('bb', { sortOrder: 1 }), client('ccc', { level: 'important' })];
+    expect(sortClients(ordered, 'manual').map((c) => c.personId)).toEqual(['bb', 'a', 'ccc']);
+  });
+
+  it('拖曳排序：只改被拖動的那一筆；新增的客戶只有在已經手動排過時才放最後', () => {
+    const list = [client('a', { sortOrder: 1 }), client('bb', { sortOrder: 2 }), client('ccc', { sortOrder: 3 })];
+    const changed = moveItem(list, 'client-ccc', 'client-bb');
+    expect(changed.map((c) => [c.personId, c.sortOrder])).toEqual([['ccc', 1.5]]);
+    expect(nextClientOrder(list)).toBe(4);
+    expect(nextClientOrder([client('x'), client('y', { deletedAt: 'z', sortOrder: 9 })])).toBeUndefined();
   });
 
   it('等級：清單只有重要與潛在；可以在列上改、改成未設定、在新增時帶上', () => {

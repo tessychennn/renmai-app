@@ -45,6 +45,8 @@ const schema = a.schema({
       name: a.string(),
       // 等級（重要／潛在）：App 端固定的代號
       level: a.string(),
+      // 手動排序用的位置（小的在上面）。用小數，拖曳只需要改被拖動的那一筆。
+      sortOrder: a.float(),
       statusId: a.string(),
       ownerId: a.string(),
       dueDate: a.string(),

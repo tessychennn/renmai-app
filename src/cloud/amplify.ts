@@ -410,11 +410,13 @@ export function createRemoteStore(): RemoteStore {
       if (!backendSupportsClients()) throw new Error(CLIENTS_NOT_DEPLOYED);
       let fields = clientToFields(c);
       const clientFields = introspectedModels()?.Client?.fields;
-      if (!clientFields?.level || !clientFields?.name) {
-        // 舊的連線設定不認得等級與名字欄位：硬傳會被默默丟掉、本機卻以為已經同步。
+      if (!clientFields?.level || !clientFields?.name || !clientFields?.sortOrder) {
+        // 舊的連線設定不認得等級、名字與手動排序欄位：硬傳會被默默丟掉、本機卻以為已經同步。
         // 有用到這些欄位的客戶先不上傳（標記留著，後端更新後自動補傳）；沒有的照常上傳，不帶新欄位。
-        if (c.level || c.name) throw new Error(fieldsNotDeployed('客戶的等級與名字'));
-        const { level: _level, name: _name, ...rest } = fields;
+        if (c.level || c.name || c.sortOrder !== undefined) {
+          throw new Error(fieldsNotDeployed('客戶的等級、名字與手動排序'));
+        }
+        const { level: _level, name: _name, sortOrder: _sortOrder, ...rest } = fields;
         fields = rest as typeof fields;
       }
       try {
